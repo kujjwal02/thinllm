@@ -15,6 +15,7 @@ class Provider(StrEnum):
 
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    BEDROCK_ANTHROPIC = "bedrock_anthropic"
     GEMINI = "gemini"
     VERTEXAI = "vertexai"
     AWS_CONVERSE_API = "aws_converse_api"
@@ -96,6 +97,12 @@ class Credentials(BaseModel):
     organization: str | None = None
     project_id: str | None = None
     region: str | None = None
+
+    # AWS-specific credentials for Bedrock
+    aws_access_key: str | None = None
+    aws_secret_key: str | None = None
+    aws_session_token: str | None = None
+    aws_region: str | None = None
 
     model_config = ConfigDict(extra="allow")
 
@@ -261,7 +268,7 @@ class LLMConfig(BaseModel):
         match self.provider:
             case Provider.OPENAI:
                 result = ParamTranslator.to_openai(self.params)
-            case Provider.ANTHROPIC:
+            case Provider.ANTHROPIC | Provider.BEDROCK_ANTHROPIC:
                 result = ParamTranslator.to_anthropic(self.params)
             case Provider.GEMINI:
                 result = ParamTranslator.to_gemini(self.params)
@@ -321,6 +328,18 @@ def _create_builtin_preset(name: str) -> LLMConfig:
                 model_id="gpt-4o-mini",
                 params=ModelParams(temperature=0.7),
             )
+        case "bedrock-claude-sonnet-4-5":
+            return LLMConfig(
+                provider=Provider.BEDROCK_ANTHROPIC,
+                model_id="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+                params=ModelParams(temperature=0.7, max_output_tokens=8192),
+            )
+        case "bedrock-claude-haiku-4-5":
+            return LLMConfig(
+                provider=Provider.BEDROCK_ANTHROPIC,
+                model_id="global.anthropic.claude-haiku-4-5-20251001-v1:0",
+                params=ModelParams(temperature=0.7, max_output_tokens=4096),
+            )
         case _:
             raise KeyError(f"Unknown built-in preset: {name}")
 
@@ -334,6 +353,8 @@ BUILTIN_PRESET_NAMES = frozenset(
         "claude-precise",
         "gpt4o",
         "gpt4o-mini",
+        "bedrock-claude-sonnet-4-5",
+        "bedrock-claude-haiku-4-5",
     ]
 )
 

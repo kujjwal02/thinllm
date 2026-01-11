@@ -21,6 +21,36 @@ from .serializers import (
 from .streaming import AnthropicStreamMessageBuilder
 
 
+def _create_client(llm_config: LLMConfig) -> anthropic.Anthropic | Any:
+    """Create either Anthropic or AnthropicBedrock client based on provider."""
+    from thinllm.config import Provider
+
+    if llm_config.provider == Provider.BEDROCK_ANTHROPIC:
+        from anthropic import AnthropicBedrock
+
+        # Only pass credentials if explicitly provided by user
+        # Otherwise, let AnthropicBedrock use AWS default credential providers
+        kwargs: dict[str, Any] = {}
+
+        if llm_config.credentials:
+            creds = llm_config.credentials
+
+            # Only add credential fields that are explicitly set
+            if creds.aws_access_key:
+                kwargs["aws_access_key"] = creds.aws_access_key
+            if creds.aws_secret_key:
+                kwargs["aws_secret_key"] = creds.aws_secret_key
+            if creds.aws_session_token:
+                kwargs["aws_session_token"] = creds.aws_session_token
+            if creds.aws_region:
+                kwargs["aws_region"] = creds.aws_region
+
+        return AnthropicBedrock(**kwargs)
+    else:
+        # Regular Anthropic client
+        return anthropic.Anthropic()
+
+
 def _build_common_params(
     llm_config: LLMConfig,
     messages: list[MessageType],
@@ -70,7 +100,7 @@ def _llm_basic(
 ) -> AIMessage:
     """Basic non-streaming LLM call."""
     params = _build_common_params(llm_config, messages, tools=tools)
-    client = anthropic.Anthropic()
+    client = _create_client(llm_config)
     response = client.messages.create(**params)
     return _get_ai_message_from_anthropic_response(response)
 
@@ -82,7 +112,7 @@ def _llm_structured(
 ) -> OutputSchemaType:
     """Non-streaming structured LLM call."""
     params = _build_common_params(llm_config, messages, output_schema=output_schema)
-    client = anthropic.Anthropic()
+    client = _create_client(llm_config)
     response = client.messages.create(**params)
 
     # Extract the tool call result
@@ -101,7 +131,7 @@ def _llm_stream(
     """Streaming LLM call."""
     params = _build_common_params(llm_config, messages, tools=tools)
     builder = AnthropicStreamMessageBuilder()
-    client = anthropic.Anthropic()
+    client = _create_client(llm_config)
 
     with client.messages.stream(**params) as stream:
         for event in stream:
@@ -122,7 +152,7 @@ def _llm_structured_stream(  # type: ignore[misc]
     """Streaming structured LLM call."""
     params = _build_common_params(llm_config, messages, output_schema=output_schema)
     builder = AnthropicStreamMessageBuilder()
-    client = anthropic.Anthropic()
+    client = _create_client(llm_config)
 
     with client.messages.stream(**params) as stream:
         for event in stream:
@@ -261,8 +291,10 @@ def llm(
     # Streaming with output schema
     if stream and output_schema:
         return _llm_structured_stream(
-            llm_config, messages, output_schema
-        )  # pyrefly: ignore[bad-argument-type]
+            llm_config,
+            messages,
+            output_schema,  # pyrefly: ignore[bad-argument-type]
+        )
 
     # Non-streaming with output schema
     if output_schema:

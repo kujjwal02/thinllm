@@ -37,7 +37,103 @@ A comprehensive example demonstrating the Gemini provider features.
 python examples/gemini_example.py
 ```
 
-### 2. Agent Example (`agent_example.py`)
+### 2. Bedrock Example (`bedrock_example.py`)
+
+A comprehensive example demonstrating how to use Anthropic Claude models via Amazon Bedrock.
+
+**Features:**
+- Basic text generation with Bedrock
+- Global vs Regional endpoints
+- AWS credential configuration (explicit and auto-detection)
+- Structured output with Pydantic models
+- Function calling with custom tools
+- Streaming responses
+- Multi-turn conversations
+- Built-in Bedrock presets
+
+**Prerequisites:**
+1. AWS Account with Amazon Bedrock access
+2. Enable model access in AWS Console:
+   - Navigate to [AWS Console > Bedrock > Model Access](https://console.aws.amazon.com/bedrock/home?region=us-west-2#/modelaccess)
+   - Request access to Anthropic models
+   - Available models: Claude Sonnet 4.5, Claude Haiku 4.5, Claude Opus 4.5, etc.
+   - Model availability varies by region - see [AWS documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/models-regions.html)
+
+**Requirements:**
+
+1. Install Bedrock dependencies:
+   ```bash
+   uv sync --group anthropic-bedrock
+   ```
+
+2. Configure AWS credentials (choose one method):
+
+   **Option A: Environment variables**
+   ```bash
+   export AWS_ACCESS_KEY_ID="your-access-key"
+   export AWS_SECRET_ACCESS_KEY="your-secret-key"
+   export AWS_REGION="us-west-2"  # Optional, defaults to us-east-1
+   ```
+   
+   **Option B: AWS credentials file** (recommended)
+   
+   Create or edit `~/.aws/credentials`:
+   ```ini
+   [default]
+   aws_access_key_id = your-access-key
+   aws_secret_access_key = your-secret-key
+   region = us-west-2
+   ```
+   
+   **Option C: Explicit credentials in code** (see example)
+   
+   **Option D: IAM roles** (if running on EC2, ECS, Lambda, etc.)
+   
+   **Option E: AWS SSO**
+
+**Run:**
+```bash
+python examples/bedrock_example.py
+```
+
+**Model IDs:**
+- **Global endpoints** (recommended for availability):
+  - `global.anthropic.claude-sonnet-4-5-20250929-v1:0`
+  - `global.anthropic.claude-haiku-4-5-20251001-v1:0`
+  - `global.anthropic.claude-opus-4-5-20251101-v1:0`
+  
+- **Regional endpoints** (for data residency requirements):
+  - `anthropic.claude-sonnet-4-5-20250929-v1:0` (10% pricing premium)
+  - `anthropic.claude-haiku-4-5-20251001-v1:0` (10% pricing premium)
+  - Set region via `aws_region` in credentials
+
+**Built-in Presets:**
+- `bedrock-claude-sonnet-4-5`: Claude Sonnet 4.5 on global endpoint
+- `bedrock-claude-haiku-4-5`: Claude Haiku 4.5 on global endpoint
+
+**Usage Example:**
+```python
+from thinllm import LLMConfig, Provider, ModelParams, UserMessage, llm
+
+# Simple usage with preset
+response = llm("bedrock-claude-sonnet-4-5", [UserMessage(content="Hello!")])
+
+# Or with explicit config
+config = LLMConfig(
+    provider=Provider.BEDROCK_ANTHROPIC,
+    model_id="global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    params=ModelParams(temperature=0.7, max_output_tokens=1024)
+)
+response = llm(config, [UserMessage(content="Hello!")])
+```
+
+**Important Notes:**
+- Global endpoints provide better availability and no pricing premium
+- Regional endpoints required for data residency compliance (10% premium)
+- AWS credentials are auto-detected from environment/files if not explicitly provided
+- Ensure you have model access enabled in AWS Bedrock console
+
+### 3. Agent Example (`agent_example.py`)
 
 A command-line example showing how to use the Agent class with custom tools.
 
@@ -51,7 +147,7 @@ A command-line example showing how to use the Agent class with custom tools.
 python examples/agent_example.py
 ```
 
-### 3. Streamlit Agent Chat (`streamlit_agent_chat.py`)
+### 4. Streamlit Agent Chat (`streamlit_agent_chat.py`)
 
 An interactive web-based chat application with full debug capabilities.
 
@@ -120,11 +216,12 @@ uv sync --group examples --group openai
 
 ## API Keys
 
-The examples require API keys for the LLM providers:
+The examples require API keys/credentials for the LLM providers:
 
 - **OpenAI**: Set `OPENAI_API_KEY` environment variable
 - **Anthropic**: Set `ANTHROPIC_API_KEY` environment variable
 - **Gemini**: Set `GEMINI_API_KEY` environment variable
+- **Bedrock**: Configure AWS credentials (see Bedrock example above for multiple options)
 
 You can set these in your shell or in a `.env` file in the project root.
 

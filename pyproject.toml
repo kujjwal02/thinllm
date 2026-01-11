@@ -43,6 +43,9 @@ anthropic = [
 gemini = [
     "google-genai>=1.57.0",
 ]
+anthropic-bedrock = [
+    "anthropic[bedrock]>=0.75.0",
+]
 
 
 [tool.mypy]
