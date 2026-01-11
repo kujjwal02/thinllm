@@ -1,0 +1,156 @@
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+    "migrations",
+    "manage.py",
+    "examples"
+]
+
+# Same as Black.
+line-length = 100
+indent-width = 4
+
+# Assume Python 3.11
+target-version = "py312"
+
+[lint]
+select = [
+    "ASYNC",  # flake8-async
+    "FA",     # flake8-future-annotations
+    "INT",    # flake8-gettext
+    "ICN",    # flake8-import-conventions
+    "T20",    # flake8-print
+    "Q",      # flake8-quotes
+    "SLOT",   # flake8-slots
+    "TID",    # flake8-tidy-imports
+    "YTT",    # flake8-2020
+    "B",      # flake8-bugbear
+    "COM",    # flake8-commas
+    "C4",     # flake8-comprehensions
+    "T10",    # flake8-debugger
+    "ICN",    # flake8-import-conventions
+    "PIE",    # flake8-pie
+    "PYI",    # flake8-pyi
+    "PT",     # flake8-pytest-style
+    "PTH",    # flake8-use-pathlib
+    "DTZ",    # flake8-datetimez
+    "RSE",    # flake8-raise
+    "RET",    # flake8-return
+    "SIM",    # flake8-simplify
+    "TID",    # flake8-tidy-imports
+    "TC",     # flake8-type-checking
+    "PD",     # pandas-vet
+    "FLY",    # flynt
+    "C90",    # mccabe
+    "NPY",    # numpy-specific-rules
+    "E",      # pycodestyle
+    "F",      # pyflakes
+    "PGH",    # pygrep-hooks
+    "COM818", # trailing-comma-on-bare-tuple
+    "N",      # pep8-naming
+    "FURB",   # refurb
+    "PLC",    # Pylint Convention
+    "PLE",    # Pylint Error
+    "PLR",    # Pylint Refactor
+    "PLW",    # Pylint Warning
+    "I",      # isort
+    "UP",     # pyupgrade
+    "PERF",   # Perflint
+    "TRY",    # tryceratops
+]
+ignore = [
+    "E501", 
+    "PLC0415", 
+    "COM812", 
+    "PYI063", 
+    "PD015",
+    "UP040",
+    "UP047",
+    "TRY003",
+    "TRY300",
+    "TRY301",
+    "UP036",
+]
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed.
+# matches _, __, and _var, but not _var_
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[lint.pylint]
+max-positional-args = 7
+max-statements = 106
+max-branches = 53
+max-args = 18
+max-returns = 15
+
+[lint.isort]
+# Use a single line for each import
+force-single-line = false
+# Sort imports by length
+length-sort = false
+# Group imports by type
+known-first-party = []
+known-third-party = []
+# Split imports across multiple lines if they exceed the line length
+split-on-trailing-comma = true
+
+[lint.per-file-ignores]
+"*.ipynb" = ["T201", "I001", "F401", "Q000"]
+"*/tests/**/*.py" = ["S101"]
+"tests/**/*.py" = ["S101"]
+
+[format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+# Enable auto-formatting of code examples in docstrings. Markdown,
+# reStructuredText code/literal blocks and doctests are all supported.
+#
+# This is currently disabled by default, but it is planned for this
+# to be opt-out in the future.
+docstring-code-format = false
+
+# Set the line length limit used when formatting code snippets in
+# docstrings.
+#
+# This only has an effect when the `docstring-code-format` setting is
+# enabled.
+docstring-code-line-length = "dynamic"
