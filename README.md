@@ -1,24 +1,83 @@
 # ThinLLM
 
-A thin, unified wrapper for LLM interactions with support for multiple providers (OpenAI, Anthropic, Gemini) and agent capabilities.
+A thin, unified wrapper for LLM interactions with support for multiple providers (OpenAI, Anthropic, AWS Bedrock, and Gemini).
+
+## Table of Contents
+
+- [Features](#features)
+- [Why ThinLLM?](#why-thinllm)
+- [Key Concepts](#key-concepts)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+  - [Basic Usage](#basic-usage)
+  - [Streaming Responses](#streaming-responses)
+  - [Structured Output](#structured-output-with-pydantic)
+  - [Function Calling](#function-calling--tools)
+- [Providers](#providers)
+  - [OpenAI](#openai)
+  - [Anthropic](#anthropic-claude)
+  - [AWS Bedrock](#aws-bedrock-anthropic-models)
+  - [Google Gemini](#google-gemini)
+- [API Reference](#api-reference)
+- [Examples](#examples)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Features
 
-- **Unified Interface**: Single API for multiple LLM providers
-- **Provider Support**: OpenAI, Anthropic (Claude), and Google Gemini
+- **Single Function API**: One `llm()` function for all providers - no need to learn multiple APIs
+- **Provider Support**: OpenAI, Anthropic (Claude), AWS Bedrock, and Google Gemini
 - **Streaming**: Full support for streaming responses
-- **Structured Output**: Get Pydantic models directly from LLMs
+- **Structured Output**: Get Pydantic models directly from LLMs with type safety
 - **Function Calling**: Tool/function calling with automatic serialization
-- **Agent Framework**: Built-in agent with tool execution and reasoning
-- **Type Safety**: Full type hints and runtime validation
+- **Type Safety**: Full type hints and runtime validation with Pydantic
+
+## Why ThinLLM?
+
+**One function. All providers. Zero hassle.**
+
+Building applications with multiple LLM providers means learning different APIs, handling different response formats, and managing provider-specific quirks. **ThinLLM** eliminates this complexity:
+
+- **Single `llm()` Function**: One function for all your LLM needs - no need to learn provider-specific APIs
+- **Write Once, Use Anywhere**: Same code works with OpenAI, Claude, Bedrock, and Gemini
+- **Provider Agnostic**: Switch providers by changing just the config - no code refactoring needed
+- **Type Safety**: Full Pydantic integration for validated, structured outputs
+- **Minimal Overhead**: Thin wrapper that stays close to native provider APIs
+- **Production Ready**: Battle-tested with comprehensive test coverage
+
+```python
+# Switch providers by updating the config
+config = LLMConfig(
+    provider="anthropic",      # Was "openai"
+    model_id="claude-sonnet-4", # Was "gpt-4"
+    params=ModelParams(temperature=0.7)
+)
+# Same llm() function, same messages, same code structure!
+response = llm(config, messages)
+```
+
+## Key Concepts
+
+**ThinLLM** is built around a single powerful principle: **one function for all your LLM needs**.
+
+Instead of learning different APIs for OpenAI, Anthropic, Bedrock, and Gemini, you just use the `llm()` function. Change providers by switching one configuration parameter - everything else stays the same.
+
+### Core Components
+
+1. **`llm()` function**: The only function you need - handles all LLM interactions
+2. **`LLMConfig`**: Configure which provider and model to use
+3. **`ModelParams`**: Standard parameters (temperature, max_tokens, etc.) that work across all providers
+4. **Messages**: Use `SystemMessage`, `UserMessage`, and `AIMessage` to build conversations
+5. **Structured Output**: Pass a Pydantic model as `output_schema` to get validated, typed responses
+6. **Tools**: Pass Python functions as `tools` parameter for function calling
 
 ## Installation
 
 ### Basic Installation
 
 ```bash
-# Install core package
-uv sync
+pip install thinllm
 ```
 
 ### Provider-Specific Dependencies
@@ -26,90 +85,151 @@ uv sync
 Install dependencies for the providers you want to use:
 
 ```bash
-# OpenAI
-uv sync --group openai
+# For OpenAI
+pip install thinllm[openai]
 
-# Anthropic
-uv sync --group anthropic
+# For Anthropic (Claude)
+pip install thinllm[anthropic]
 
-# Gemini
-uv sync --group gemini
+# For AWS Bedrock with Anthropic models
+pip install thinllm[bedrock]
 
-# All providers
-uv sync --group openai --group anthropic --group gemini
+# For Google Gemini
+pip install thinllm[gemini]
+
+# For all providers
+pip install thinllm[all]
+```
+
+### Environment Setup
+
+Set your API keys as environment variables or use a `.env` file:
+
+```bash
+export OPENAI_API_KEY=your-openai-key-here
+export ANTHROPIC_API_KEY=your-anthropic-key-here
+export GEMINI_API_KEY=your-gemini-key-here
+
+# AWS credentials (for Bedrock)
+export AWS_ACCESS_KEY_ID=your-aws-access-key
+export AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+export AWS_REGION=us-east-1
+```
+
+Or create a `.env` file in your project:
+
+```env
+OPENAI_API_KEY=your-openai-key-here
+ANTHROPIC_API_KEY=your-anthropic-key-here
+GEMINI_API_KEY=your-gemini-key-here
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+AWS_REGION=us-east-1
 ```
 
 ## Quick Start
 
 ### Basic Usage
 
-```python
-from thinllm import llm, LLMConfig, Provider, UserMessage
+Here's how to make your first LLM call:
 
-# Configure your provider
+```python
+from thinllm import llm, LLMConfig, ModelParams, UserMessage
+from dotenv import load_dotenv
+
+# Load your API keys
+load_dotenv()
+
+# Configure your LLM
 config = LLMConfig(
-    provider=Provider.OPENAI,  # or Provider.ANTHROPIC, Provider.GEMINI
+    provider="openai",  # or "anthropic", "bedrock_anthropic", "gemini"
     model_id="gpt-4",
-    model_args={"temperature": 0.7}
+    params=ModelParams(temperature=0.7, max_output_tokens=1024)
 )
 
-# Make a request
-messages = [UserMessage(content="What is 2+2?")]
+# Ask a question
+messages = [UserMessage(content="What is the capital of France?")]
 response = llm(config, messages)
-print(response.content)
+
+# Print the response
+print(response.content[0].text)
+# Output: The capital of France is Paris.
 ```
 
-### Streaming
+### Streaming Responses
+
+Stream responses in real-time for better user experience:
 
 ```python
-# Stream the response
+# Stream the response - each chunk contains the complete response up to that point
 for chunk in llm(config, messages, stream=True):
-    print(chunk.content, end="", flush=True)
+    if chunk.content:
+        print(chunk.content[0].text)
+        # Note: chunk.content[0].text contains the full text generated so far, not just the diff
 ```
 
-### Structured Output
+### Structured Output with Pydantic
+
+Get validated, structured data directly from the LLM:
 
 ```python
 from pydantic import BaseModel
+from thinllm import SystemMessage
 
-class Recipe(BaseModel):
-    name: str
-    ingredients: list[str]
-    prep_time_minutes: int
+class CalendarEvent(BaseModel):
+    thought: str | None = None
+    name: str | None = None
+    date: str | None = None
+    participants: list[str] | None = None
 
-# Get structured output
-recipe = llm(config, messages, output_schema=Recipe)
-print(f"Recipe: {recipe.name}")
-print(f"Ingredients: {', '.join(recipe.ingredients)}")
+messages = [
+    SystemMessage(content="Extract the event information."),
+    UserMessage(content="Alice and Bob are going to a science fair on Friday."),
+]
+
+# Get structured output that matches your Pydantic model
+response = llm(config, messages, output_schema=CalendarEvent)
+
+print(f"Event: {response.name}")
+print(f"Date: {response.date}")
+print(f"Participants: {', '.join(response.participants)}")
 ```
 
-### Function Calling
+### Function Calling / Tools
+
+Enable the LLM to request function calls:
 
 ```python
-from thinllm.tools import tool
+from thinllm import SystemMessage
 
-@tool
-def get_weather(location: str) -> str:
-    """Get the weather for a location."""
-    return f"The weather in {location} is sunny."
+# Define a simple function
+def get_horoscope(sign: str):
+    """Get the horoscope for a zodiac sign."""
+    return f"{sign}: Next Tuesday you will befriend a baby otter."
 
-response = llm(config, messages, tools=[get_weather])
-```
+messages = [
+    SystemMessage(content="You are a helpful assistant."),
+    UserMessage(content="What is my horoscope? I am an Aquarius."),
+]
 
-### Agent with Tools
+# The LLM will indicate which function to call
+response = llm(config, messages, tools=[get_horoscope])
 
-```python
-from thinllm import Agent
-
-agent = Agent(
-    llm_config=config,
-    messages=[SystemMessage(content="You are a helpful assistant.")],
-    tools=[get_weather],
-    max_iterations=5
-)
-
-result = agent.run("What's the weather in Paris?")
-print(result.final_response)
+# Check if the LLM requested a tool call
+if response.get_tool_call_contents():
+    tool_call = response.get_tool_call_contents()[0]
+    print(f"LLM requested function: {tool_call.name}")
+    print(f"With arguments: {tool_call.input}")
+    
+    # Execute the tool and continue the conversation
+    messages.append(response)
+    messages.append(
+        UserMessage(content=[tool_call.get_tool_result(tools=[get_horoscope])])
+    )
+    
+    # Get the final response after tool execution
+    final_response = llm(config, messages, tools=[get_horoscope])
+    print(final_response.content[0].text)
 ```
 
 ## Providers
@@ -117,55 +237,101 @@ print(result.final_response)
 ### OpenAI
 
 ```python
+from thinllm import LLMConfig, ModelParams
+
 config = LLMConfig(
-    provider=Provider.OPENAI,
+    provider="openai",
     model_id="gpt-4",
-    model_args={"temperature": 0.7}
+    params=ModelParams(
+        temperature=0.7,
+        max_output_tokens=4096
+    )
 )
 ```
 
-**Supported Models**: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`, etc.
+**Supported Models**: `gpt-4`, `gpt-4-turbo`, `gpt-3.5-turbo`, `gpt-4o`, etc.
 
-**API Key**: Set `OPENAI_API_KEY` environment variable
+**Setup**: Set `OPENAI_API_KEY` environment variable
 
-### Anthropic
+### Anthropic (Claude)
 
 ```python
 config = LLMConfig(
-    provider=Provider.ANTHROPIC,
-    model_id="claude-sonnet-4-5",
-    model_args={
-        "temperature": 0.7,
-        "max_tokens": 4096
-    }
+    provider="anthropic",
+    model_id="claude-sonnet-4",
+    params=ModelParams(
+        temperature=0.7,
+        max_output_tokens=4096
+    )
 )
 ```
 
-**Supported Models**: `claude-sonnet-4-5`, `claude-opus-4`, etc.
+**Supported Models**: `claude-sonnet-4`, `claude-opus-4`, `claude-3-5-sonnet-20241022`, etc.
 
-**API Key**: Set `ANTHROPIC_API_KEY` environment variable
+**Setup**: Set `ANTHROPIC_API_KEY` environment variable
 
-### Gemini
+### AWS Bedrock (Anthropic Models)
+
+Use Claude models through AWS Bedrock:
 
 ```python
 config = LLMConfig(
-    provider=Provider.GEMINI,
+    provider="bedrock_anthropic",
+    model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    params=ModelParams(
+        temperature=0.0,
+        max_output_tokens=1024
+    )
+)
+```
+
+**Supported Models**: Any Anthropic model available in AWS Bedrock
+- `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
+- `global.anthropic.claude-sonnet-4-5-20250929-v1:0`
+- And other Bedrock model IDs
+
+**Setup**: Configure AWS credentials through environment variables or AWS CLI:
+```env
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_REGION=us-east-1  # or your preferred region
+```
+
+### Google Gemini
+
+```python
+config = LLMConfig(
+    provider="gemini",
     model_id="gemini-2.5-flash",
-    model_args={"temperature": 0.7}
+    params=ModelParams(temperature=0.7)
 )
 ```
 
-**Supported Models**: `gemini-2.5-flash`, `gemini-2.5-pro`, etc.
+**Supported Models**: `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-1.5-pro`, etc.
 
-**API Key**: Set `GEMINI_API_KEY` environment variable
+**Setup**: Set `GEMINI_API_KEY` environment variable
+
+### Provider Feature Comparison
+
+| Feature | OpenAI | Anthropic | Bedrock | Gemini |
+|---------|--------|-----------|---------|--------|
+| Basic Chat | ✅ | ✅ | ✅ | ✅ |
+| Streaming | ✅ | ✅ | ✅ | ✅ |
+| Structured Output | ✅ | ✅ | ✅ | ✅ |
+| Function Calling | ✅ | ✅ | ✅ | ✅ |
+| Vision (Images) | ✅ | ✅ | ✅ | ✅ |
+| Thinking Mode | ❌ | ❌ | ❌ | ✅ |
+| Built-in Search | ❌ | ❌ | ❌ | ✅ |
+| Code Execution | ❌ | ❌ | ❌ | ✅ |
 
 #### Gemini-Specific Features
 
 **Thinking Mode** (Extended Reasoning):
 ```python
 config = LLMConfig(
-    provider=Provider.GEMINI,
+    provider="gemini",
     model_id="gemini-2.5-pro",
+    params=ModelParams(temperature=0.7),
     model_args={
         "thinking_budget": 2048,      # Allocate tokens for reasoning
         "include_thoughts": True,     # Include reasoning in response
@@ -223,9 +389,23 @@ def llm(
 
 ```python
 class LLMConfig(BaseModel):
-    provider: Provider          # OPENAI, ANTHROPIC, or GEMINI
-    model_id: str              # Model identifier
-    model_args: dict[str, Any] # Provider-specific arguments
+    provider: str                           # "openai", "anthropic", "bedrock_anthropic", or "gemini"
+    model_id: str                          # Model identifier (e.g., "gpt-4", "claude-sonnet-4")
+    params: ModelParams | None = None      # Standard model parameters
+    model_args: dict[str, Any] = {}        # Provider-specific arguments
+```
+
+#### `ModelParams`
+
+Standard parameters that work across all providers:
+
+```python
+class ModelParams(BaseModel):
+    temperature: float | None = None           # Controls randomness (0.0 to 2.0)
+    max_output_tokens: int | None = None       # Maximum tokens to generate
+    top_p: float | None = None                 # Nucleus sampling parameter
+    top_k: int | None = None                   # Top-k sampling parameter
+    stop_sequences: list[str] | None = None    # Sequences where the model stops
 ```
 
 ### Messages
@@ -247,100 +427,77 @@ class LLMConfig(BaseModel):
 
 See the [`examples/`](examples/) directory for complete examples:
 
-- **`gemini_example.py`**: Comprehensive Gemini provider examples
-- **`agent_example.py`**: Agent with custom tools
-- **`streamlit_agent_chat.py`**: Interactive web-based chat with debug view
+- **`gemini_example.py`**: Comprehensive Gemini provider examples with thinking mode
+- **`bedrock_example.py`**: AWS Bedrock integration examples
+- **`agent_example.py`**: Multi-turn conversations and tool usage patterns
+- **`streamlit_streaming_chat.py`**: Interactive streaming chat interface
+- **`streamlit_agent_chat.py`**: Web-based chat interface with debug view
 
-## Testing
-
-### Run All Tests
-
-```bash
-pytest
-```
-
-### Run Provider-Specific Tests
+### Running Examples
 
 ```bash
-# OpenAI tests only
-pytest -m openai
+# Install example dependencies
+pip install streamlit
 
-# Anthropic tests only
-pytest -m anthropic
+# Run a specific example
+python examples/bedrock_example.py
 
-# Gemini tests only
-pytest -m gemini
-
-# Integration tests only (makes real API calls)
-pytest -m integration
-
-# Unit tests only (mocked)
-pytest -m unit
+# Run the Streamlit chat interface
+streamlit run examples/streamlit_streaming_chat.py
 ```
 
-### Environment Variables for Testing
+## Troubleshooting
 
-Set API keys in `.env` file:
+### Common Issues
 
+**Import Errors**
+```python
+# Ensure you've installed the provider-specific dependencies
+pip install thinllm[anthropic]  # or openai, gemini, bedrock
 ```
-OPENAI_API_KEY=your-openai-key
-ANTHROPIC_API_KEY=your-anthropic-key
-GEMINI_API_KEY=your-gemini-key
+
+**API Key Issues**
+```python
+# Make sure your environment variables are set
+from dotenv import load_dotenv
+load_dotenv()
+
+# Or set them directly
+import os
+os.environ["ANTHROPIC_API_KEY"] = "your-key"
 ```
 
-## Development
-
-### Setup
-
+**AWS Bedrock Authentication**
 ```bash
-# Install all dependencies including dev tools
-uv sync --all-groups
+# Configure AWS CLI (recommended)
+aws configure
 
-# Run tests with coverage
-pytest --cov
-
-# Run linter
-ruff check .
-
-# Format code
-ruff format .
+# Or set environment variables
+export AWS_ACCESS_KEY_ID=your-key
+export AWS_SECRET_ACCESS_KEY=your-secret
+export AWS_REGION=us-east-1
 ```
 
-### Project Structure
-
-```
-thinllm/
-├── src/thinllm/
-│   ├── __init__.py           # Main exports
-│   ├── core.py               # Unified llm() function
-│   ├── config.py             # Configuration models
-│   ├── messages.py           # Message types
-│   ├── tools.py              # Tool definitions
-│   ├── agent.py              # Agent implementation
-│   └── providers/
-│       ├── openai/           # OpenAI provider
-│       ├── anthropic/        # Anthropic provider
-│       └── gemini/           # Gemini provider
-├── tests/
-│   ├── integration/          # Integration tests (real API calls)
-│   └── unit/                 # Unit tests (mocked)
-├── examples/                 # Example applications
-└── docs/                     # Documentation
+**Model Not Found**
+```python
+# Bedrock models use region-specific IDs:
+# "us.anthropic.claude-sonnet-4-5-20250929-v1:0"  # US region
+# "global.anthropic.claude-sonnet-4-5-20250929-v1:0"  # Global
 ```
 
 ## Contributing
 
-Contributions are welcome! Please:
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on:
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+- Setting up the development environment
+- Running tests
+- Code quality standards
+- Common development patterns
+- Submitting pull requests
 
 ## License
 
-[Add your license here]
+MIT License - see [LICENSE](LICENSE) file for details
 
 ## Acknowledgments
 
