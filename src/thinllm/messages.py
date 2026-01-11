@@ -1,10 +1,18 @@
 """Message types and tool-related data models for LLM interactions."""
 
-from typing import Any, Literal
+import logging
+from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 from thinllm.compat import StrEnum
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from thinllm.tools import Tool
+
+logger = logging.getLogger(__name__)
 
 
 class ContentExtra(BaseModel):
@@ -12,7 +20,7 @@ class ContentExtra(BaseModel):
     Extra information about content blocks.
     """
 
-    gemini_thought_signature: bytes | None = None
+    gemini_thought_signature: bytes | None = Field(default=None, exclude=True)
 
 
 class BaseContentBlock(BaseModel):
@@ -153,6 +161,38 @@ class ToolCallContent(BaseContentBlock):
     raw_input: str = ""
     status: ToolCallStatus = ToolCallStatus.PENDING
 
+    def get_tool_result(
+        self,
+        tools: "list[Tool | Callable | dict]",
+    ) -> "ToolResultContent":
+        """
+        Execute the tool and return the result.
+
+        This is a convenience method that delegates to the get_tool_result function in utils.
+
+        Args:
+            tools: List of tools available for execution. Can include:
+                - Tool objects
+                - Callable functions
+                - dict objects (e.g., for built-in tools like web_search)
+
+        Returns:
+            ToolResultContent with execution result
+
+        Example:
+            >>> from thinllm.tools import tool
+            >>> @tool
+            ... def add(a: int, b: int) -> int:
+            ...     return a + b
+            >>> tool_call = ToolCallContent(name="add", input={"a": 1, "b": 2}, tool_id="1")
+            >>> result = tool_call.get_tool_result(tools=[add])
+            >>> print(result.output)
+            "3"
+        """
+        from thinllm.utils import get_tool_result
+
+        return get_tool_result(self, tools)
+
 
 class ToolResultContent(BaseContentBlock):
     """
@@ -273,6 +313,17 @@ class AIMessage(BaseMessage):
     """
 
     role: str = "ai"
+
+    def get_tool_call_contents(self) -> list[ToolCallContent]:
+        """
+        Get all tool call content blocks from the message.
+
+        Returns:
+            List of ToolCallContent blocks. Empty list if content is a string or contains no tool calls.
+        """
+        if isinstance(self.content, list):
+            return [block for block in self.content if isinstance(block, ToolCallContent)]
+        return []
 
 
 class AIMessageChunk(AIMessage):

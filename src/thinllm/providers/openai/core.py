@@ -31,7 +31,7 @@ def _build_common_params(
         "model": llm_config.model_id,
         "input": _get_oai_messages(messages),
         "instructions": _get_instruction_from_messages(messages),
-        **llm_config.model_args,
+        **llm_config.get_effective_params(),
     }
 
     if tools:

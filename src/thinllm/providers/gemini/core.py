@@ -43,10 +43,12 @@ def _build_common_params(  # noqa: C901
     if system_instruction:
         config_dict["system_instruction"] = system_instruction
 
-    # Handle model_args
+    # Get effective params
+    effective_params = llm_config.get_effective_params()
+
     # Extract special parameters that need special handling
-    thinking_budget = llm_config.model_args.get("thinking_budget")
-    include_thoughts = llm_config.model_args.get("include_thoughts", False)
+    thinking_budget = effective_params.get("thinking_budget")
+    include_thoughts = effective_params.get("include_thoughts", False)
 
     # Add thinking config if needed
     if thinking_budget is not None:
@@ -55,11 +57,11 @@ def _build_common_params(  # noqa: C901
             include_thoughts=include_thoughts,
         )
 
-    # Add other model_args to config (exclude our custom ones)
+    # Add other effective params to config (exclude our custom ones)
     config_dict.update(
         {
             key: value
-            for key, value in llm_config.model_args.items()
+            for key, value in effective_params.items()
             if key not in ("thinking_budget", "include_thoughts")
         }
     )

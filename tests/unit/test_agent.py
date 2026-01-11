@@ -17,11 +17,23 @@ from thinllm.messages import (
 from thinllm.tools import tool
 
 
-@pytest.fixture(params=[
-    pytest.param((Provider.OPENAI, "gpt-4", {"temperature": 0.0}), marks=pytest.mark.openai, id="openai"),
-    pytest.param((Provider.ANTHROPIC, "claude-sonnet-4-5", {"temperature": 0.0, "max_tokens": 4096}), marks=pytest.mark.anthropic, id="anthropic"),
-    pytest.param((Provider.GEMINI, "gemini-2.5-flash", {"temperature": 0.0}), marks=pytest.mark.gemini, id="gemini"),
-])
+@pytest.fixture(
+    params=[
+        pytest.param(
+            (Provider.OPENAI, "gpt-4", {"temperature": 0.0}), marks=pytest.mark.openai, id="openai"
+        ),
+        pytest.param(
+            (Provider.ANTHROPIC, "claude-sonnet-4-5", {"temperature": 0.0, "max_tokens": 4096}),
+            marks=pytest.mark.anthropic,
+            id="anthropic",
+        ),
+        pytest.param(
+            (Provider.GEMINI, "gemini-2.5-flash", {"temperature": 0.0}),
+            marks=pytest.mark.gemini,
+            id="gemini",
+        ),
+    ]
+)
 def mock_llm_config(request):
     """Create a mock LLM config for testing with different providers."""
     provider, model_id, model_args = request.param
@@ -182,7 +194,9 @@ def test_execute_tool_not_found(mock_llm_config, simple_tool):
     messages = [SystemMessage(content="You are a helpful assistant.")]
     agent = Agent(llm_config=mock_llm_config, messages=messages, tools=[simple_tool])
 
-    tool_call = ToolCallContent(tool_id="call_404", name="nonexistent_tool", input={}, raw_input="{}")
+    tool_call = ToolCallContent(
+        tool_id="call_404", name="nonexistent_tool", input={}, raw_input="{}"
+    )
 
     result = agent._execute_tool(tool_call)
 
@@ -218,7 +232,10 @@ def test_execute_tool_dict_based_tool_error(mock_llm_config):
     agent = Agent(llm_config=mock_llm_config, messages=messages, tools=[web_search_tool])
 
     tool_call = ToolCallContent(
-        tool_id="call_search", name="web_search", input={"query": "test"}, raw_input='{"query": "test"}'
+        tool_id="call_search",
+        name="web_search",
+        input={"query": "test"},
+        raw_input='{"query": "test"}',
     )
 
     result = agent._execute_tool(tool_call)
@@ -283,7 +300,9 @@ def test_agent_tool_result_pending_status(mock_llm_config):
 
     # Create an AI message with tool calls but no user message yet
     ai_message = AIMessage(
-        content=[ToolCallContent(tool_id="call_1", name="tool_a", input={"x": 1}, raw_input='{"x": 1}')]
+        content=[
+            ToolCallContent(tool_id="call_1", name="tool_a", input={"x": 1}, raw_input='{"x": 1}')
+        ]
     )
 
     step = AgentStep(ai_message=ai_message, user_message=None, status=StepStatus.IN_PROGRESS)

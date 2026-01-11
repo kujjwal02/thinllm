@@ -28,12 +28,16 @@ def _build_common_params(
     output_schema: type[OutputSchemaType] | None = None,
 ) -> dict[str, Any]:
     """Build common parameters for Anthropic API calls."""
+    # Get effective params
+    effective_params = llm_config.get_effective_params()
+
     params: dict[str, Any] = {
         "model": llm_config.model_id,
         "messages": _get_anthropic_messages(messages),
-        "max_tokens": llm_config.model_args.get("max_tokens", 4096),
-        **{k: v for k, v in llm_config.model_args.items() if k != "max_tokens"},
     }
+
+    # Add effective params
+    params.update(effective_params)
 
     # Add system message if present
     system = _get_system_from_messages(messages)
@@ -80,12 +84,12 @@ def _llm_structured(
     params = _build_common_params(llm_config, messages, output_schema=output_schema)
     client = anthropic.Anthropic()
     response = client.messages.create(**params)
-    
+
     # Extract the tool call result
     for content in response.content:
         if content.type == "tool_use" and content.name == "respond_with_structure":
             return output_schema(**content.input)
-    
+
     raise ValueError("No structured response received from Anthropic")
 
 
@@ -124,7 +128,7 @@ def _llm_structured_stream(  # type: ignore[misc]
         for event in stream:
             builder.add_event(event)
             ai_message = _get_ai_message_from_anthropic_response(builder.response)
-            
+
             # Try to extract partial structured output
             if isinstance(ai_message.content, list):
                 for block in ai_message.content:
@@ -136,7 +140,7 @@ def _llm_structured_stream(  # type: ignore[misc]
     for content in builder.response.content:
         if content.type == "tool_use" and content.name == "respond_with_structure":
             return output_schema(**content.input)
-    
+
     raise ValueError("No structured response received from Anthropic")
 
 
@@ -256,7 +260,9 @@ def llm(
 
     # Streaming with output schema
     if stream and output_schema:
-        return _llm_structured_stream(llm_config, messages, output_schema)  # pyrefly: ignore[bad-argument-type]
+        return _llm_structured_stream(
+            llm_config, messages, output_schema
+        )  # pyrefly: ignore[bad-argument-type]
 
     # Non-streaming with output schema
     if output_schema:
@@ -268,4 +274,3 @@ def llm(
 
     # Non-streaming without output schema
     return _llm_basic(llm_config, messages, tools)
-

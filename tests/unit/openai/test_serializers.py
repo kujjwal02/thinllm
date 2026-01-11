@@ -177,7 +177,6 @@ class TestConvertContentToOAIFormat:
         result = _convert_content_to_oai_format(content)
         assert result == "Hello, world!"
 
-
     def test_convert_list_with_single_text_block(self) -> None:
         """Test converting list with single TextBlock."""
         content = [InputTextBlock(text="Hello from list!")]
@@ -190,7 +189,9 @@ class TestConvertContentToOAIFormat:
 
     def test_convert_list_with_single_image_block(self) -> None:
         """Test converting list with single InputImageBlock."""
-        content = [InputImageBlock(image_url="https://example.com/img.jpg", detail=ImageDetail.AUTO)]
+        content = [
+            InputImageBlock(image_url="https://example.com/img.jpg", detail=ImageDetail.AUTO)
+        ]
         result = _convert_content_to_oai_format(content)
 
         assert isinstance(result, list)
@@ -495,7 +496,9 @@ class TestGetInstructionFromMessages:
             SystemMessage(content="Text instruction."),
             SystemMessage(
                 content=[
-                    InputImageBlock(image_url="https://example.com/img.jpg", detail=ImageDetail.AUTO)
+                    InputImageBlock(
+                        image_url="https://example.com/img.jpg", detail=ImageDetail.AUTO
+                    )
                 ]
             ),
         ]
@@ -506,7 +509,9 @@ class TestGetInstructionFromMessages:
     def test_system_message_with_list_of_text_blocks(self) -> None:
         """Test extracting instructions from system message with list of TextBlocks."""
         messages = [
-            SystemMessage(content=[InputTextBlock(text="First part."), InputTextBlock(text="Second part.")])
+            SystemMessage(
+                content=[InputTextBlock(text="First part."), InputTextBlock(text="Second part.")]
+            )
         ]
         result = _get_instruction_from_messages(messages)
         assert result == "First part.\nSecond part."
@@ -517,7 +522,9 @@ class TestGetInstructionFromMessages:
             SystemMessage(
                 content=[
                     InputTextBlock(text="Some text"),
-                    InputImageBlock(image_url="https://example.com/img.jpg", detail=ImageDetail.AUTO),
+                    InputImageBlock(
+                        image_url="https://example.com/img.jpg", detail=ImageDetail.AUTO
+                    ),
                 ]
             )
         ]

@@ -88,7 +88,9 @@ def test_llm_simple_question(
     assert isinstance(response.content, list), (
         f"Expected content to be a list, got {type(response.content)}"
     )
-    assert len(response.content) >= 1, f"Expected at least 1 content block, got {len(response.content)}"
+    assert len(response.content) >= 1, (
+        f"Expected at least 1 content block, got {len(response.content)}"
+    )
 
     # Find text block
     text_blocks = [block for block in response.content if isinstance(block, OutputTextBlock)]
@@ -397,7 +399,9 @@ def test_llm_streaming_with_structured_output(
 
     # Verify final model (the return value of the generator)
     final_person = partial_person  # Last chunk is the final model
-    assert isinstance(final_person, Person), f"Expected final result to be Person, got {type(final_person)}"
+    assert isinstance(final_person, Person), (
+        f"Expected final result to be Person, got {type(final_person)}"
+    )
 
     # Verify all fields are populated
     assert final_person.name, "Name should not be empty"
@@ -407,10 +411,15 @@ def test_llm_streaming_with_structured_output(
 
     assert final_person.age, "Age should be set"
     expected_age = 35
-    assert final_person.age == expected_age, f"Expected age {expected_age}, but got: {final_person.age}"
+    assert final_person.age == expected_age, (
+        f"Expected age {expected_age}, but got: {final_person.age}"
+    )
 
     assert final_person.occupation, "Occupation should not be empty"
-    assert "engineer" in final_person.occupation.lower() or "software" in final_person.occupation.lower(), (
+    assert (
+        "engineer" in final_person.occupation.lower()
+        or "software" in final_person.occupation.lower()
+    ), (
         f"Expected occupation to contain 'engineer' or 'software', but got: {final_person.occupation}"
     )
 
@@ -418,4 +427,3 @@ def test_llm_streaming_with_structured_output(
     assert len(final_person.hobbies) >= 2, (  # noqa: PLR2004
         f"Expected at least 2 hobbies, but got {len(final_person.hobbies)}: {final_person.hobbies}"
     )
-

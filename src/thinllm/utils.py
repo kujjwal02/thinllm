@@ -1,9 +1,18 @@
 """Internal utility functions for LLM service interactions."""
 
+import logging
 import re
-from typing import TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 import jiter
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from thinllm.messages import ToolCallContent, ToolOutputStatus, ToolResultContent
+    from thinllm.tools import Tool
+
+logger = logging.getLogger(__name__)
 
 # Pattern for detecting incomplete Unicode escape sequences
 PARTIAL_UNICODE_PATTERN = re.compile(r"\\u[0-9a-fA-F]{0,3}$")
@@ -44,3 +53,177 @@ def parse_partial_json(json_str: str) -> JSONTYPE:
     return jiter.from_json(
         json_str.encode("utf-8"), cache_mode="keys", partial_mode="trailing-strings"
     )
+
+
+def normalize_tools(tools: "list[Tool | Callable | dict]") -> "list[Tool]":
+    """
+    Convert a list of mixed tool types into a list of Tool objects.
+
+    This function normalizes various tool formats (Tool objects, callables, dicts)
+    into a consistent list of Tool objects. Dict-based tools (like web_search)
+    are filtered out as they're handled by LLM providers.
+
+    Args:
+        tools: List of tools that can include:
+            - Tool objects
+            - Callable functions (will be converted to Tool objects)
+            - dict objects (filtered out, used for built-in provider tools)
+
+    Returns:
+        List of Tool objects
+
+    Example:
+        >>> from thinllm.tools import tool
+        >>> @tool
+        ... def add(a: int, b: int) -> int:
+        ...     return a + b
+        >>> def multiply(x: int, y: int) -> int:
+        ...     return x * y
+        >>> tool_list = normalize_tools([add, multiply])
+        >>> [t.name for t in tool_list]
+        ['add', 'multiply']
+    """
+    from thinllm.tools import Tool
+    from thinllm.tools import tool as tool_decorator
+
+    tool_list: list[Tool] = []
+
+    for t in tools:
+        match t:
+            case Tool():
+                tool_list.append(t)
+            case dict():
+                # Skip dict-based tools (like web_search) - they're handled by LLM provider
+                pass
+            case _ if callable(t):
+                # Convert callable to Tool
+                converted_tool = tool_decorator(t)
+                tool_list.append(converted_tool)
+            case _:
+                logger.warning(f"Unknown tool type: {type(t)}, skipping")
+
+    return tool_list
+
+
+def _build_result_kwargs(
+    tool_call: "ToolCallContent",
+    output: str,
+    status: "ToolOutputStatus",
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build base kwargs dictionary for ToolResultContent."""
+    result_kwargs = {
+        "tool_id": tool_call.tool_id,
+        "name": tool_call.name,
+        "raw_input": tool_call.raw_input,
+        "input": tool_call.input,
+        "output": output,
+        "status": status,
+    }
+    if tool_call.id:
+        result_kwargs["id"] = tool_call.id
+    if metadata:
+        result_kwargs["metadata"] = metadata
+    return result_kwargs
+
+
+def _create_tool_error_result(
+    tool_call: "ToolCallContent",
+    error_msg: str,
+    metadata: dict[str, Any] | None = None,
+) -> "ToolResultContent":
+    """Create a ToolResultContent for an error."""
+    from thinllm.messages import ToolOutputStatus, ToolResultContent
+
+    result_kwargs = _build_result_kwargs(
+        tool_call,
+        output=error_msg,
+        status=ToolOutputStatus.FAILURE,
+        metadata=metadata,
+    )
+    return ToolResultContent(**result_kwargs)
+
+
+def _build_tool_result(tool_call: "ToolCallContent", result: Any) -> "ToolResultContent":
+    """Build a ToolResultContent from the raw execution result."""
+    from thinllm.messages import ToolOutput, ToolOutputStatus, ToolResultContent
+
+    # Normalize the return value
+    match result:
+        case None:
+            output_text = ""
+            metadata = {}
+            status = ToolOutputStatus.SUCCESS
+        case str():
+            output_text = result
+            metadata = {}
+            status = ToolOutputStatus.SUCCESS
+        case ToolOutput():
+            output_text = result.text
+            metadata = result.metadata
+            status = result.status
+        case _:
+            # Convert to string for other types
+            output_text = str(result)
+            metadata = {}
+            status = ToolOutputStatus.SUCCESS
+
+    result_kwargs = _build_result_kwargs(
+        tool_call,
+        output=output_text,
+        status=status,
+        metadata=metadata if metadata else None,
+    )
+    return ToolResultContent(**result_kwargs)
+
+
+def get_tool_result(
+    tool_call: "ToolCallContent",
+    tools: "list[Tool | Callable | dict]",
+) -> "ToolResultContent":
+    """
+    Execute a tool call and return the result.
+
+    Args:
+        tool_call: The tool call content block to execute
+        tools: List of tools available for execution. Can include:
+            - Tool objects
+            - Callable functions
+            - dict objects (e.g., for built-in tools like web_search)
+
+    Returns:
+        ToolResultContent with execution result
+
+    Example:
+        >>> from thinllm.tools import tool
+        >>> from thinllm.messages import ToolCallContent
+        >>> @tool
+        ... def add(a: int, b: int) -> int:
+        ...     return a + b
+        >>> tool_call = ToolCallContent(name="add", input={"a": 1, "b": 2}, tool_id="1")
+        >>> result = get_tool_result(tool_call, tools=[add])
+        >>> print(result.output)
+        "3"
+    """
+    # Normalize tools and build mapping
+    normalized_tools = normalize_tools(tools)
+    tool_map = {t.name: t for t in normalized_tools}
+
+    # Check if tool exists
+    if tool_call.name not in tool_map:
+        error_msg = f"Tool '{tool_call.name}' not found. Available tools: {list(tool_map.keys())}"
+        return _create_tool_error_result(tool_call, error_msg)
+
+    tool_func = tool_map[tool_call.name]
+
+    # Execute the tool
+    try:
+        result = tool_func(**tool_call.input)
+        return _build_tool_result(tool_call, result)
+    except Exception as e:
+        error_msg = f"Error executing tool '{tool_call.name}': {str(e)}"
+        return _create_tool_error_result(
+            tool_call,
+            error_msg,
+            metadata={"error": str(e), "error_type": type(e).__name__},
+        )

@@ -351,4 +351,3 @@ class TestGetAnthropicTool:
         assert "Add two numbers" in result["description"]
         assert "input_schema" in result
         assert isinstance(result["input_schema"], dict)
-

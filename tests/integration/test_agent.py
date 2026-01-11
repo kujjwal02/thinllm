@@ -403,6 +403,7 @@ def test_agent_response_discriminator(
 
 # Provider-specific tests for features that differ between providers
 
+
 @pytest.mark.integration
 @pytest.mark.openai
 def test_agent_with_openai_reasoning(openai_api_key: str) -> None:
@@ -616,4 +617,3 @@ def test_agent_with_anthropic_thinking(anthropic_api_key: str) -> None:
         keyword in final_text
         for keyword in ["amount", "interest", "10,000", "10000", "compound", "$"]
     ), f"Final message should reference the calculation, got: {final_text}"
-

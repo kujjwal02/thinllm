@@ -76,4 +76,3 @@ def _get_ai_message_from_anthropic_response(response: AnthropicMessage) -> AIMes
         ai_message.content = content_blocks
 
     return ai_message
-

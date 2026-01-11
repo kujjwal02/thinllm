@@ -107,11 +107,17 @@ class OAIStreamMessageBuilder:
                 ].arguments = event.arguments
             case "response.completed":
                 self._response = event.response.model_copy()
-            case "response.web_search_call.in_progress" | "response.web_search_call.searching" | "response.web_search_call.completed":
+            case (
+                "response.web_search_call.in_progress"
+                | "response.web_search_call.searching"
+                | "response.web_search_call.completed"
+            ):
                 # No new content to add to the response
                 pass
             case "response.output_text.annotation.added":
-                self.response.output[event.output_index].content[event.content_index].annotations.append(event.annotation)  # type: ignore[attr-defined]
+                self.response.output[event.output_index].content[
+                    event.content_index
+                ].annotations.append(event.annotation)  # type: ignore[attr-defined]
             case _:
                 raise ValueError(f"Unknown event type: {event.type}")
         return self.response

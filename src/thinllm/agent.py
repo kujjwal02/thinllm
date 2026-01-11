@@ -19,7 +19,8 @@ from thinllm.messages import (
     ToolResultContent,
     UserMessage,
 )
-from thinllm.tools import Tool, tool
+from thinllm.tools import Tool
+from thinllm.utils import normalize_tools
 
 logger = logging.getLogger(__name__)
 
@@ -216,23 +217,12 @@ class Agent:
         self.max_iterations = max_iterations
 
         # Build tool mapping for lookup
-        self._tool_map: dict[str, Tool] = {}
         self._raw_tools = tools or []
-
         if tools:
-            for t in tools:
-                match t:
-                    case Tool():
-                        self._tool_map[t.name] = t
-                    case dict():
-                        # Skip dict-based tools (like web_search) - they're handled by LLM provider
-                        pass
-                    case _ if callable(t):
-                        # Convert callable to Tool
-                        converted_tool = tool(t)
-                        self._tool_map[converted_tool.name] = converted_tool
-                    case _:
-                        logger.warning(f"Unknown tool type: {type(t)}, skipping")
+            normalized_tools = normalize_tools(tools)
+            self._tool_map: dict[str, Tool] = {t.name: t for t in normalized_tools}
+        else:
+            self._tool_map = {}
 
     def _execute_tool(self, tool_call: ToolCallContent) -> ToolResultContent:
         """
@@ -304,7 +294,7 @@ class Agent:
             # Only include metadata if it's not empty
             if metadata:
                 result_kwargs["metadata"] = metadata
-            
+
             return ToolResultContent(**result_kwargs)
 
         except Exception as e:
@@ -469,9 +459,7 @@ class Agent:
     def _extract_tool_calls(self, ai_message: AIMessage) -> list[ToolCallContent]:
         """Extract tool call content blocks from an AI message."""
         if isinstance(ai_message.content, list):
-            return [
-                block for block in ai_message.content if isinstance(block, ToolCallContent)
-            ]
+            return [block for block in ai_message.content if isinstance(block, ToolCallContent)]
         return []
 
     def _stream_llm_response(
@@ -578,9 +566,7 @@ class Agent:
             iterations=iteration,
         )
 
-    def _ask_stream(
-        self, request: AgentRequest
-    ) -> Generator[AgentResponse, None, AgentResponse]:
+    def _ask_stream(self, request: AgentRequest) -> Generator[AgentResponse, None, AgentResponse]:
         """
         Streaming implementation of ask.
 
@@ -622,20 +608,26 @@ class Agent:
 
             # Finalize step
             tool_result_message = UserMessage(content=tool_results)  # type: ignore[arg-type]
-            steps.append(AgentStep(
-                ai_message=final_ai_message,
-                user_message=tool_result_message,
-                status=StepStatus.SUCCEEDED,
-            ))
+            steps.append(
+                AgentStep(
+                    ai_message=final_ai_message,
+                    user_message=tool_result_message,
+                    status=StepStatus.SUCCEEDED,
+                )
+            )
             self.messages.append(tool_result_message)
 
         # Max iterations - stream final response without tools
         logger.warning(f"Agent reached max iterations ({self.max_iterations}) without completion")
-        self.messages.append(UserMessage(
-            content="Maximum iterations exhausted. Please provide a final response without calling any tools."
-        ))
+        self.messages.append(
+            UserMessage(
+                content="Maximum iterations exhausted. Please provide a final response without calling any tools."
+            )
+        )
 
-        final_ai_message, _ = yield from self._stream_llm_response(steps, iteration, use_tools=False)
+        final_ai_message, _ = yield from self._stream_llm_response(
+            steps, iteration, use_tools=False
+        )
         self.messages.append(final_ai_message)
 
         final_response = AgentResponse(

@@ -103,27 +103,29 @@ def _get_anthropic_messages(messages: list[MessageType]) -> list[dict[str, Any]]
                     content_list = [{"type": "text", "text": message.content}]
                 else:
                     content_list = [
-                        _convert_content_block_to_anthropic_dict(block)
-                        for block in message.content
+                        _convert_content_block_to_anthropic_dict(block) for block in message.content
                     ]
-                
-                result.append({
-                    "role": "user",
-                    "content": content_list,
-                })
+
+                result.append(
+                    {
+                        "role": "user",
+                        "content": content_list,
+                    }
+                )
             case AIMessage():
                 if isinstance(message.content, str):
                     content_list = [{"type": "text", "text": message.content}]
                 else:
                     content_list = [
-                        _convert_content_block_to_anthropic_dict(block)
-                        for block in message.content
+                        _convert_content_block_to_anthropic_dict(block) for block in message.content
                     ]
-                
-                result.append({
-                    "role": "assistant",
-                    "content": content_list,
-                })
+
+                result.append(
+                    {
+                        "role": "assistant",
+                        "content": content_list,
+                    }
+                )
     return result
 
 
@@ -177,8 +179,7 @@ def _get_system_from_messages(messages: list[MessageType]) -> str:
                 case list():
                     # Handle list of ContentBlocks - extract text from InputTextBlocks
                     text_blocks = [
-                        block.text for block in content
-                        if isinstance(block, InputTextBlock)
+                        block.text for block in content if isinstance(block, InputTextBlock)
                     ]
                     # Check if all blocks were InputTextBlocks
                     if len(text_blocks) != len(content):
@@ -189,4 +190,3 @@ def _get_system_from_messages(messages: list[MessageType]) -> str:
                                 )
                     system_parts.extend(text_blocks)
     return "\n".join(system_parts)
-

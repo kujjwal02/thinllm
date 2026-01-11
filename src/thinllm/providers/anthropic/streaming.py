@@ -89,14 +89,22 @@ class AnthropicStreamMessageBuilder:
                 self.response.usage = event.usage
                 self.response.stop_reason = event.delta.stop_reason
                 self.response.stop_sequence = event.delta.stop_sequence
-            
-            case "content_block_stop" | "message_stop" | "signature" | "text" | "input_json" | "thinking":
+
+            case (
+                "content_block_stop"
+                | "message_stop"
+                | "signature"
+                | "text"
+                | "input_json"
+                | "thinking"
+            ):
                 # These are snapshot/completion events that don't need special handling
                 # The actual data is already in the content blocks from delta events
                 pass
 
             case _:
-                raise ValueError(f"Unknown event type: {event.type} with data {event.model_dump_json(indent=2)}")
-        
-        return self.response
+                raise ValueError(
+                    f"Unknown event type: {event.type} with data {event.model_dump_json(indent=2)}"
+                )
 
+        return self.response

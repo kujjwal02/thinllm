@@ -7,7 +7,7 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
-    from .config import LLMConfig
+    from .config import LLMConfig, LLMConfigOrPreset
     from .messages import AIMessage, MessageType
     from .tools import Tool
 
@@ -45,7 +45,7 @@ def _get_gemini_llm():
 # Overload 1: Non-streaming, no output schema (with or without tools)
 @overload
 def llm(
-    llm_config: LLMConfig,
+    config: LLMConfigOrPreset,
     messages: list[MessageType],
     *,
     output_schema: None = None,
@@ -57,7 +57,7 @@ def llm(
 # Overload 2: Non-streaming, with output schema
 @overload
 def llm(
-    llm_config: LLMConfig,
+    config: LLMConfigOrPreset,
     messages: list[MessageType],
     *,
     output_schema: type[OutputSchemaType],
@@ -69,7 +69,7 @@ def llm(
 # Overload 3: Streaming, no output schema (with or without tools)
 @overload
 def llm(
-    llm_config: LLMConfig,
+    config: LLMConfigOrPreset,
     messages: list[MessageType],
     *,
     output_schema: None = None,
@@ -81,7 +81,7 @@ def llm(
 # Overload 4: Streaming, with output schema
 @overload
 def llm(
-    llm_config: LLMConfig,
+    config: LLMConfigOrPreset,
     messages: list[MessageType],
     *,
     output_schema: type[OutputSchemaType],
@@ -91,7 +91,7 @@ def llm(
 
 
 def llm(
-    llm_config: LLMConfig,
+    config: LLMConfigOrPreset,
     messages: list[MessageType],
     *,
     output_schema: type[OutputSchemaType] | None = None,
@@ -110,7 +110,7 @@ def llm(
     routes to the appropriate provider implementation based on the config.
 
     Args:
-        llm_config: Configuration for the LLM (model, temperature, provider, etc.)
+        config: Configuration for the LLM (LLMConfig object or preset name string)
         messages: List of conversation messages
         output_schema: Optional Pydantic model for structured output
         tools: Optional list of tools/functions the LLM can call
@@ -126,14 +126,18 @@ def llm(
     Raises:
         NotImplementedError: If both output_schema and tools are provided (incompatible)
         ValueError: If the provider is not supported
+        KeyError: If preset name is not found
 
     Examples:
-        Basic text response:
-        >>> config = LLMConfig(model_id="gpt-4", provider="openai")
+        Basic text response with config:
+        >>> config = LLMConfig(model_id="gpt-4", provider=Provider.OPENAI)
         >>> messages = [UserMessage(content="What is 2+2?")]
         >>> response = llm(config, messages)
         >>> print(response.content)
         '2+2 equals 4'
+
+        Using preset name:
+        >>> response = llm("gemini-thinking", messages)
 
         Structured response:
         >>> class Recipe(BaseModel):
@@ -146,6 +150,14 @@ def llm(
         >>> for partial_msg in llm(config, messages, stream=True):
         ...     print(partial_msg.content, end="", flush=True)
     """
+    # Resolve preset if string
+    if isinstance(config, str):
+        from .config import get_preset
+
+        llm_config = get_preset(config)
+    else:
+        llm_config = config
+
     # Get provider name from config
     provider = llm_config.provider.lower() if hasattr(llm_config, "provider") else "openai"
 
@@ -175,4 +187,6 @@ def llm(
         #     return provider_llm(llm_config, messages, output_schema=output_schema, tools=tools, stream=stream)  # type: ignore[return-value]
 
         case _:
-            raise ValueError(f"Unsupported provider: {provider}. Supported providers: openai, anthropic, gemini")
+            raise ValueError(
+                f"Unsupported provider: {provider}. Supported providers: openai, anthropic, gemini"
+            )

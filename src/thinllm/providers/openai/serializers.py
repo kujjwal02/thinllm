@@ -64,7 +64,9 @@ def _convert_content_block_to_oai_dict(block: ContentBlock) -> dict:
             elif block.image_url:
                 image_url = block.image_url
             else:
-                raise ValueError("InputImageBlock must have either image_bytes or a non-empty image_url")
+                raise ValueError(
+                    "InputImageBlock must have either image_bytes or a non-empty image_url"
+                )
 
             return {
                 "type": "input_image",
@@ -159,9 +161,9 @@ def _get_oai_messages(messages: list[MessageType]) -> list[dict[str, Any]]:
         - ReasoningContent, WebSearchCallContent, ToolCallContent, and ToolResultContent
           are separated into their own message entries (without role)
         - Order is preserved across all content types
-    
+
     Raises:
-        TypeError: If OutputTextBlock is used in UserMessage or InputTextBlock/InputImageBlock 
+        TypeError: If OutputTextBlock is used in UserMessage or InputTextBlock/InputImageBlock
                   is used in AIMessage
     """
     result = []
@@ -174,7 +176,7 @@ def _get_oai_messages(messages: list[MessageType]) -> list[dict[str, Any]]:
                 if message.content:
                     content = message.content
                     if isinstance(content, str):
-                        # Simple string content
+                        # Simple string content - in this case, use message.id since there's no content block
                         msg_dict = {
                             "role": "user" if isinstance(message, UserMessage) else "assistant",
                             "content": content,
@@ -203,7 +205,9 @@ def _get_oai_messages(messages: list[MessageType]) -> list[dict[str, Any]]:
                                         "OutputTextBlock is not allowed in UserMessage. "
                                         "Use InputTextBlock instead."
                                     )
-                                is_regular_content = isinstance(block, (InputTextBlock, InputImageBlock))
+                                is_regular_content = isinstance(
+                                    block, (InputTextBlock, InputImageBlock)
+                                )
                             else:  # AIMessage
                                 # Assistant messages only accept OutputTextBlock
                                 if isinstance(block, (InputTextBlock, InputImageBlock)):
@@ -228,8 +232,9 @@ def _get_oai_messages(messages: list[MessageType]) -> list[dict[str, Any]]:
                                     # Add id and type for assistant messages
                                     if role == "assistant":
                                         msg_dict["type"] = "message"
-                                        if hasattr(message, "id") and message.id:
-                                            msg_dict["id"] = message.id
+                                        # Use the first content block's ID if available
+                                        if accumulated_content and accumulated_content[0].id:
+                                            msg_dict["id"] = accumulated_content[0].id
                                     result.append(msg_dict)
                                     accumulated_content = []
 
@@ -245,8 +250,9 @@ def _get_oai_messages(messages: list[MessageType]) -> list[dict[str, Any]]:
                             # Add id and type for assistant messages
                             if role == "assistant":
                                 msg_dict["type"] = "message"
-                                if hasattr(message, "id") and message.id:
-                                    msg_dict["id"] = message.id
+                                # Use the first content block's ID if available
+                                if accumulated_content and accumulated_content[0].id:
+                                    msg_dict["id"] = accumulated_content[0].id
                             result.append(msg_dict)
     return result
 
