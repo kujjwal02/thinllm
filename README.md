@@ -342,6 +342,62 @@ config = LLMConfig(
 
 **Setup**: Set `ANTHROPIC_API_KEY` environment variable
 
+#### Anthropic-Specific Features
+
+**Prompt Caching** (Reduce costs and latency):
+
+Anthropic's [prompt caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) allows you to cache frequently used content blocks (like system prompts, large documents, or context) to reduce costs and improve response times.
+
+```python
+from thinllm import (
+    llm, LLMConfig, SystemMessage, UserMessage,
+    InputTextBlock, ContentExtra, AnthropicCacheControl
+)
+
+# System prompt with caching
+system_msg = SystemMessage(content=[
+    InputTextBlock(text="You are a helpful assistant."),
+    InputTextBlock(
+        text="Here is a large document to reference: ...",
+        extra=ContentExtra(
+            # Cache with default TTL (5 minutes)
+            anthropic_cache_control=AnthropicCacheControl()
+        )
+    )
+])
+
+# User message with cached context
+user_msg = UserMessage(content=[
+    InputTextBlock(
+        text="Long context that will be reused across multiple requests...",
+        extra=ContentExtra(
+            # Cache for 1 hour
+            anthropic_cache_control=AnthropicCacheControl(ttl="1h")
+        )
+    ),
+    InputTextBlock(text="What is the main theme?")
+])
+
+config = LLMConfig(
+    provider="anthropic",
+    model_id="claude-sonnet-4",
+    params=ModelParams(max_output_tokens=1024)
+)
+
+response = llm(config, [system_msg, user_msg])
+```
+
+**Cache Control Options:**
+- `ttl`: Time-to-live for cache - `"5m"` (5 minutes, default) or `"1h"` (1 hour)
+- `enabled`: Set to `False` to explicitly disable caching (default: `True`)
+- Omit `ttl` to use Anthropic's default TTL (5 minutes)
+
+**Best Practices:**
+- Cache large, reusable context (system prompts, documents, examples)
+- Use longer TTL (`"1h"`) for stable content
+- Cache control is ignored by other providers (Anthropic-only feature)
+- Not supported for reasoning/thinking content blocks
+
 ### AWS Bedrock (Anthropic Models)
 
 Use Claude models through AWS Bedrock:
@@ -392,6 +448,7 @@ config = LLMConfig(
 | Structured Output | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Function Calling | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Vision (Images) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Prompt Caching | ❌ | ❌ | ✅ | ✅ | ❌ |
 | Thinking Mode | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Built-in Search | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Code Execution | ❌ | ❌ | ❌ | ❌ | ✅ |
@@ -567,7 +624,7 @@ The following features are planned for ThinLLM. These are **up for grabs** - con
 ### Provider Enhancements
 
 - [ ] **Vertex AI Support**: Integration with Google Cloud's Vertex AI platform
-- [ ] **Anthropic Caching**: Prompt caching support for improved performance and cost efficiency
+- [x] **Anthropic Caching**: Prompt caching support for improved performance and cost efficiency
 - [ ] **Anthropic Extended Thinking Support**: Enhanced reasoning capabilities
 - [ ] **Anthropic Support for Thinking with Structured Output**: Using beta API where applicable
 

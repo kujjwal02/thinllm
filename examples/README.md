@@ -133,7 +133,71 @@ response = llm(config, [UserMessage(content="Hello!")])
 - AWS credentials are auto-detected from environment/files if not explicitly provided
 - Ensure you have model access enabled in AWS Bedrock console
 
-### 3. Agent Example (`agent_example.py`)
+### 3. Anthropic Cache Example (`anthropic_cache_example.py`)
+
+Demonstrates Anthropic's prompt caching feature to reduce costs and improve response times.
+
+**Features:**
+- Basic caching with default TTL (5 minutes)
+- Explicit TTL configuration (1 hour)
+- Multi-turn conversations with cache reuse
+- Mixed cached and regular content
+- Disabled caching option
+
+**Requirements:**
+1. Install Anthropic dependencies:
+   ```bash
+   uv sync --group anthropic
+   ```
+
+2. Set your Anthropic API key:
+   ```bash
+   export ANTHROPIC_API_KEY="your-api-key-here"
+   ```
+
+**Run:**
+```bash
+python examples/anthropic_cache_example.py
+```
+
+**When to Use Caching:**
+- Large system prompts or instructions
+- Frequently referenced documents
+- Few-shot examples
+- Stable context that doesn't change between requests
+
+**Cache Control Options:**
+- `ttl`: `"5m"` (default) or `"1h"`
+- `enabled`: Set to `False` to disable caching
+- Omit `ttl` to use provider's default
+
+### 4. Anthropic Vision Example (`anthropic_vision_example.py`)
+
+Demonstrates using Claude's vision capabilities to analyze images.
+
+**Features:**
+- Image analysis from URLs
+- Image analysis from local files
+- Multiple images in one request
+- Base64 image encoding
+
+**Requirements:**
+1. Install Anthropic dependencies:
+   ```bash
+   uv sync --group anthropic
+   ```
+
+2. Set your Anthropic API key:
+   ```bash
+   export ANTHROPIC_API_KEY="your-api-key-here"
+   ```
+
+**Run:**
+```bash
+python examples/anthropic_vision_example.py
+```
+
+### 5. Agent Example (`agent_example.py`)
 
 A command-line example showing how to use the Agent class with custom tools.
 
@@ -147,7 +211,7 @@ A command-line example showing how to use the Agent class with custom tools.
 python examples/agent_example.py
 ```
 
-### 4. Streamlit Agent Chat (`streamlit_agent_chat.py`)
+### 6. Streamlit Agent Chat (`streamlit_agent_chat.py`)
 
 An interactive web-based chat application with full debug capabilities.
 

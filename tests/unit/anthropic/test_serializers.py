@@ -4,6 +4,8 @@ import pytest
 
 from thinllm.messages import (
     AIMessage,
+    AnthropicCacheControl,
+    ContentExtra,
     InputImageBlock,
     InputTextBlock,
     OutputTextBlock,
@@ -18,7 +20,7 @@ from thinllm.providers.anthropic.serializers import (
     _convert_content_block_to_anthropic_dict,
     _get_anthropic_messages,
     _get_anthropic_tool,
-    _get_system_from_messages,
+    _get_system_blocks_from_messages,
 )
 from thinllm.tools import Tool
 
@@ -203,6 +205,166 @@ class TestConvertContentBlockToAnthropicDict:
             assert result["source"]["type"] == "base64"
             assert result["source"]["media_type"] == media_type
             assert result["source"]["data"] == base64.standard_b64encode(image_bytes).decode("utf-8")
+
+
+class TestCacheControl:
+    """Test cache control functionality for content blocks."""
+
+    def test_text_block_with_cache_control_default_ttl(self) -> None:
+        """Test text block with cache control using default TTL."""
+        block = InputTextBlock(
+            text="Cached content",
+            extra=ContentExtra(
+                anthropic_cache_control=AnthropicCacheControl()
+            ),
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+        
+        assert result["type"] == "text"
+        assert result["text"] == "Cached content"
+        assert "cache_control" in result
+        assert result["cache_control"]["type"] == "ephemeral"
+        assert "ttl" not in result["cache_control"]
+
+    def test_text_block_with_cache_control_5m_ttl(self) -> None:
+        """Test text block with 5 minute cache TTL."""
+        block = InputTextBlock(
+            text="Short-lived cache",
+            extra=ContentExtra(
+                anthropic_cache_control=AnthropicCacheControl(ttl="5m")
+            ),
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+        
+        assert result["cache_control"]["type"] == "ephemeral"
+        assert result["cache_control"]["ttl"] == "5m"
+
+    def test_text_block_with_cache_control_1h_ttl(self) -> None:
+        """Test text block with 1 hour cache TTL."""
+        block = OutputTextBlock(
+            text="Long-lived cache",
+            extra=ContentExtra(
+                anthropic_cache_control=AnthropicCacheControl(ttl="1h")
+            ),
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+        
+        assert result["cache_control"]["type"] == "ephemeral"
+        assert result["cache_control"]["ttl"] == "1h"
+
+    def test_text_block_with_cache_control_disabled(self) -> None:
+        """Test text block with cache control disabled."""
+        block = InputTextBlock(
+            text="Not cached",
+            extra=ContentExtra(
+                anthropic_cache_control=AnthropicCacheControl(enabled=False)
+            ),
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+        
+        assert "cache_control" not in result
+
+    def test_text_block_without_cache_control(self) -> None:
+        """Test text block without any cache control."""
+        block = InputTextBlock(text="Regular text")
+        result = _convert_content_block_to_anthropic_dict(block)
+        
+        assert "cache_control" not in result
+
+    def test_image_block_with_cache_control_url(self) -> None:
+        """Test image block with URL and cache control."""
+        block = InputImageBlock(
+            image_url="https://example.com/image.jpg",
+            extra=ContentExtra(
+                anthropic_cache_control=AnthropicCacheControl(ttl="1h")
+            ),
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+        
+        assert result["type"] == "image"
+        assert "cache_control" in result
+        assert result["cache_control"]["type"] == "ephemeral"
+        assert result["cache_control"]["ttl"] == "1h"
+
+    def test_image_block_with_cache_control_base64(self) -> None:
+        """Test image block with base64 data and cache control."""
+        image_bytes = b"\x89PNG\r\n\x1a\n"
+        block = InputImageBlock(
+            image_bytes=image_bytes,
+            mimetype="image/png",
+            extra=ContentExtra(
+                anthropic_cache_control=AnthropicCacheControl()
+            ),
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+        
+        assert result["type"] == "image"
+        assert "cache_control" in result
+        assert result["cache_control"]["type"] == "ephemeral"
+
+    def test_tool_call_with_cache_control(self) -> None:
+        """Test tool call content with cache control."""
+        block = ToolCallContent(
+            tool_id="call_123",
+            name="test_tool",
+            input={"param": "value"},
+            extra=ContentExtra(
+                anthropic_cache_control=AnthropicCacheControl(ttl="5m")
+            ),
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+        
+        assert result["type"] == "tool_use"
+        assert "cache_control" in result
+        assert result["cache_control"]["type"] == "ephemeral"
+        assert result["cache_control"]["ttl"] == "5m"
+
+    def test_tool_result_with_cache_control(self) -> None:
+        """Test tool result content with cache control."""
+        block = ToolResultContent(
+            tool_id="call_456",
+            name="test_tool",
+            output="Tool output",
+            extra=ContentExtra(
+                anthropic_cache_control=AnthropicCacheControl(ttl="1h")
+            ),
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+        
+        assert result["type"] == "tool_result"
+        assert "cache_control" in result
+        assert result["cache_control"]["type"] == "ephemeral"
+        assert result["cache_control"]["ttl"] == "1h"
+
+    def test_reasoning_content_never_cached(self) -> None:
+        """Test that ReasoningContent never gets cache control (not supported by Anthropic)."""
+        block = ReasoningContent(
+            signature="sig123",
+            summaries=["Summary"],
+            contents=["Content"],
+            extra=ContentExtra(
+                anthropic_cache_control=AnthropicCacheControl(ttl="1h")
+            ),
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+        
+        assert result["type"] == "thinking"
+        # Cache control should NOT be present for reasoning content
+        assert "cache_control" not in result
+
+    def test_reasoning_content_redacted_never_cached(self) -> None:
+        """Test that redacted ReasoningContent never gets cache control."""
+        block = ReasoningContent(
+            redacted_content="redacted",
+            extra=ContentExtra(
+                anthropic_cache_control=AnthropicCacheControl(ttl="1h")
+            ),
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+        
+        assert result["type"] == "redacted_thinking"
+        # Cache control should NOT be present for reasoning content
+        assert "cache_control" not in result
 
 
 class TestGetAnthropicMessages:
@@ -408,20 +570,28 @@ class TestGetAnthropicMessages:
         assert result[0]["content"][4]["type"] == "text"
 
 
-class TestGetSystemFromMessages:
-    """Test the _get_system_from_messages function."""
+class TestGetSystemBlocksFromMessages:
+    """Test the _get_system_blocks_from_messages function."""
 
     def test_single_system_message_string(self) -> None:
         """Test extracting system from single system message with string."""
         messages = [SystemMessage(content="You are a helpful assistant.")]
-        result = _get_system_from_messages(messages)
-        assert result == "You are a helpful assistant."
+        result = _get_system_blocks_from_messages(messages)
+        
+        assert len(result) == 1
+        assert result[0]["type"] == "text"
+        assert result[0]["text"] == "You are a helpful assistant."
+        assert "cache_control" not in result[0]
 
     def test_single_system_message_text_block_in_list(self) -> None:
         """Test extracting system from system message with TextBlock in list."""
         messages = [SystemMessage(content=[InputTextBlock(text="You are helpful.")])]
-        result = _get_system_from_messages(messages)
-        assert result == "You are helpful."
+        result = _get_system_blocks_from_messages(messages)
+        
+        assert len(result) == 1
+        assert result[0]["type"] == "text"
+        assert result[0]["text"] == "You are helpful."
+        assert "cache_control" not in result[0]
 
     def test_multiple_system_messages(self) -> None:
         """Test extracting and combining multiple system messages."""
@@ -430,8 +600,11 @@ class TestGetSystemFromMessages:
             SystemMessage(content=[InputTextBlock(text="Second instruction.")]),
             UserMessage(content="User message"),
         ]
-        result = _get_system_from_messages(messages)
-        assert result == "First instruction.\nSecond instruction."
+        result = _get_system_blocks_from_messages(messages)
+        
+        assert len(result) == 2
+        assert result[0]["text"] == "First instruction."
+        assert result[1]["text"] == "Second instruction."
 
     def test_system_message_with_list_of_text_blocks(self) -> None:
         """Test extracting system from system message with list of TextBlocks."""
@@ -440,20 +613,90 @@ class TestGetSystemFromMessages:
                 content=[InputTextBlock(text="First part."), InputTextBlock(text="Second part.")]
             )
         ]
-        result = _get_system_from_messages(messages)
-        assert result == "First part.\nSecond part."
+        result = _get_system_blocks_from_messages(messages)
+        
+        assert len(result) == 2
+        assert result[0]["text"] == "First part."
+        assert result[1]["text"] == "Second part."
 
     def test_no_system_messages(self) -> None:
         """Test when there are no system messages."""
         messages = [UserMessage(content="Hello"), AIMessage(content="Hi there")]
-        result = _get_system_from_messages(messages)
-        assert result == ""
+        result = _get_system_blocks_from_messages(messages)
+        assert result == []
 
     def test_empty_messages_list(self) -> None:
         """Test with empty messages list."""
         messages = []
-        result = _get_system_from_messages(messages)
-        assert result == ""
+        result = _get_system_blocks_from_messages(messages)
+        assert result == []
+
+    def test_system_message_with_cache_control_default_ttl(self) -> None:
+        """Test system message with cache control using default TTL."""
+        messages = [
+            SystemMessage(
+                content=[
+                    InputTextBlock(text="Regular text."),
+                    InputTextBlock(
+                        text="Cached text.",
+                        extra=ContentExtra(
+                            anthropic_cache_control=AnthropicCacheControl()
+                        ),
+                    ),
+                ]
+            )
+        ]
+        result = _get_system_blocks_from_messages(messages)
+        
+        assert len(result) == 2
+        assert result[0]["text"] == "Regular text."
+        assert "cache_control" not in result[0]
+        
+        assert result[1]["text"] == "Cached text."
+        assert "cache_control" in result[1]
+        assert result[1]["cache_control"]["type"] == "ephemeral"
+        assert "ttl" not in result[1]["cache_control"]
+
+    def test_system_message_with_cache_control_explicit_ttl(self) -> None:
+        """Test system message with cache control using explicit TTL."""
+        messages = [
+            SystemMessage(
+                content=[
+                    InputTextBlock(
+                        text="Long-lived cache.",
+                        extra=ContentExtra(
+                            anthropic_cache_control=AnthropicCacheControl(ttl="1h")
+                        ),
+                    ),
+                ]
+            )
+        ]
+        result = _get_system_blocks_from_messages(messages)
+        
+        assert len(result) == 1
+        assert result[0]["text"] == "Long-lived cache."
+        assert result[0]["cache_control"]["type"] == "ephemeral"
+        assert result[0]["cache_control"]["ttl"] == "1h"
+
+    def test_system_message_with_cache_control_disabled(self) -> None:
+        """Test system message with cache control disabled."""
+        messages = [
+            SystemMessage(
+                content=[
+                    InputTextBlock(
+                        text="Not cached.",
+                        extra=ContentExtra(
+                            anthropic_cache_control=AnthropicCacheControl(enabled=False)
+                        ),
+                    ),
+                ]
+            )
+        ]
+        result = _get_system_blocks_from_messages(messages)
+        
+        assert len(result) == 1
+        assert result[0]["text"] == "Not cached."
+        assert "cache_control" not in result[0]
 
 
 class TestGetAnthropicTool:

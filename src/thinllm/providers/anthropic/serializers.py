@@ -19,6 +19,19 @@ from thinllm.messages import (
 from thinllm.tools import Tool
 
 
+def _add_cache_control(result_dict: dict, block: ContentBlock) -> None:
+    """Add cache_control to result dict if present and enabled in block.extra."""
+    if (
+        block.extra
+        and block.extra.anthropic_cache_control
+        and block.extra.anthropic_cache_control.enabled
+    ):
+        cache_control_dict = {"type": "ephemeral"}
+        if block.extra.anthropic_cache_control.ttl:
+            cache_control_dict["ttl"] = block.extra.anthropic_cache_control.ttl
+        result_dict["cache_control"] = cache_control_dict
+
+
 def _convert_content_block_to_anthropic_dict(block: ContentBlock) -> dict:  # noqa: C901
     """
     Convert a single ContentBlock to Anthropic content object format.
@@ -34,15 +47,19 @@ def _convert_content_block_to_anthropic_dict(block: ContentBlock) -> dict:  # no
     """
     match block:
         case InputTextBlock():
-            return {
+            result = {
                 "type": "text",
                 "text": block.text,
             }
+            _add_cache_control(result, block)
+            return result
         case OutputTextBlock():
-            return {
+            result = {
                 "type": "text",
                 "text": block.text,
             }
+            _add_cache_control(result, block)
+            return result
         case ReasoningContent():
             # Anthropic uses ThinkingBlock for reasoning
             if block.redacted_content:
@@ -58,19 +75,23 @@ def _convert_content_block_to_anthropic_dict(block: ContentBlock) -> dict:  # no
                 "thinking": thinking_text,
             }
         case ToolCallContent():
-            return {
+            result = {
                 "type": "tool_use",
                 "id": block.tool_id,
                 "name": block.name,
                 "input": block.input,
             }
+            _add_cache_control(result, block)
+            return result
         case ToolResultContent():
-            return {
+            result = {
                 "type": "tool_result",
                 "tool_use_id": block.tool_id,
                 "content": block.output,
                 "is_error": block.status.value == "failure",
             }
+            _add_cache_control(result, block)
+            return result
         case InputImageBlock():
             import base64
 
@@ -84,13 +105,15 @@ def _convert_content_block_to_anthropic_dict(block: ContentBlock) -> dict:  # no
 
             # Handle URL-based images
             if block.image_url:
-                return {
+                result = {
                     "type": "image",
                     "source": {
                         "type": "url",
                         "url": block.image_url,
                     },
                 }
+                _add_cache_control(result, block)
+                return result
 
             # Handle base64-encoded images
             if block.image_bytes:
@@ -100,7 +123,7 @@ def _convert_content_block_to_anthropic_dict(block: ContentBlock) -> dict:  # no
                 # Encode bytes to base64 string
                 base64_data = base64.standard_b64encode(block.image_bytes).decode("utf-8")
 
-                return {
+                result = {
                     "type": "image",
                     "source": {
                         "type": "base64",
@@ -108,6 +131,8 @@ def _convert_content_block_to_anthropic_dict(block: ContentBlock) -> dict:  # no
                         "data": base64_data,
                     },
                 }
+                _add_cache_control(result, block)
+                return result
 
             # This shouldn't happen due to model validation, but just in case
             raise ValueError("InputImageBlock must have either image_url or image_bytes")
@@ -197,39 +222,38 @@ def _get_anthropic_tool(tool: Tool | Callable | dict) -> dict:
     }
 
 
-def _get_system_from_messages(messages: list[MessageType]) -> str:
+def _get_system_blocks_from_messages(messages: list[MessageType]) -> list[dict[str, Any]]:
     """
-    Extract system instructions from messages.
+    Extract system blocks from messages with cache control support.
 
-    Combines all SystemMessage content into a single system string.
+    Transforms SystemMessage content into a list of text blocks in Anthropic format,
+    preserving cache control settings on individual blocks.
 
     Args:
         messages: List of messages to extract system instructions from
 
     Returns:
-        Combined system text from all system messages
+        List of text block dictionaries in Anthropic format with optional cache_control
 
     Raises:
-        ValueError: If a system message contains non-text content blocks
+        TypeError: If a system message contains non-text content blocks
     """
-    system_parts: list[str] = []
+    system_blocks: list[dict[str, Any]] = []
     for message in messages:
         if isinstance(message, SystemMessage):
             content = message.content
             match content:
                 case str():
-                    system_parts.append(content)
+                    system_blocks.append({"type": "text", "text": content})
                 case list():
-                    # Handle list of ContentBlocks - extract text from InputTextBlocks
-                    text_blocks = [
-                        block.text for block in content if isinstance(block, InputTextBlock)
-                    ]
-                    # Check if all blocks were InputTextBlocks
-                    if len(text_blocks) != len(content):
-                        for block in content:
-                            if not isinstance(block, InputTextBlock):
-                                raise TypeError(
-                                    f"Unsupported content block type in system message: {type(block)}"
-                                )
-                    system_parts.extend(text_blocks)
-    return "\n".join(system_parts)
+                    # Handle list of ContentBlocks - convert InputTextBlocks to dicts
+                    for block in content:
+                        if isinstance(block, InputTextBlock):
+                            block_dict = {"type": "text", "text": block.text}
+                            _add_cache_control(block_dict, block)
+                            system_blocks.append(block_dict)
+                        else:
+                            raise TypeError(
+                                f"Unsupported content block type in system message: {type(block)}"
+                            )
+    return system_blocks

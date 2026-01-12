@@ -3,7 +3,7 @@
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, Field, computed_field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from thinllm.compat import StrEnum
 
@@ -15,12 +15,27 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class AnthropicCacheControl(BaseModel):
+    """
+    Anthropic cache control configuration.
+
+    Attributes:
+        enabled: Whether cache control is enabled (default: True)
+        ttl: Time-to-live for the cache. Can be "5m" (5 minutes) or "1h" (1 hour).
+             If None, Anthropic will use the default TTL (5 minutes).
+    """
+
+    enabled: bool = True
+    ttl: Literal["5m", "1h"] | None = None
+
+
 class ContentExtra(BaseModel):
     """
     Extra information about content blocks.
     """
 
     gemini_thought_signature: bytes | None = Field(default=None, exclude=True)
+    anthropic_cache_control: AnthropicCacheControl | None = None
 
 
 class BaseContentBlock(BaseModel):

@@ -16,7 +16,7 @@ from .deserializers import _get_ai_message_from_anthropic_response
 from .serializers import (
     _get_anthropic_messages,
     _get_anthropic_tool,
-    _get_system_from_messages,
+    _get_system_blocks_from_messages,
 )
 from .streaming import AnthropicStreamMessageBuilder
 
@@ -70,9 +70,9 @@ def _build_common_params(
     params.update(effective_params)
 
     # Add system message if present
-    system = _get_system_from_messages(messages)
-    if system:
-        params["system"] = system
+    system_blocks = _get_system_blocks_from_messages(messages)
+    if system_blocks:
+        params["system"] = system_blocks
 
     if tools:
         params["tools"] = [_get_anthropic_tool(tool) for tool in tools]

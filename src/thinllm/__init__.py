@@ -19,6 +19,8 @@ from .config import (
 from .core import llm
 from .messages import (
     AIMessage,
+    AnthropicCacheControl,
+    ContentExtra,
     ImageDetail,
     InputImageBlock,
     InputTextBlock,
@@ -59,6 +61,8 @@ __all__ = [
     "OutputTextBlock",
     "InputImageBlock",
     "ImageDetail",
+    "ContentExtra",
+    "AnthropicCacheControl",
     "ToolCallContent",
     "ToolCallStatus",
     "ToolResultContent",
