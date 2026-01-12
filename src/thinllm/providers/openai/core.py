@@ -20,6 +20,58 @@ from .serializers import (
 from .streaming import OAIStreamMessageBuilder
 
 
+def _create_client(llm_config: LLMConfig) -> openai.OpenAI:
+    """Create OpenAI or Azure OpenAI client based on provider."""
+    from thinllm.config import Provider
+
+    if llm_config.provider == Provider.AZURE_OPENAI:
+        # Azure OpenAI client configuration
+        kwargs: dict[str, Any] = {}
+
+        if not llm_config.credentials:
+            raise ValueError("credentials with azure_endpoint required for Azure OpenAI")
+
+        creds = llm_config.credentials
+
+        # Required: Azure endpoint
+        if not creds.azure_endpoint:
+            raise ValueError("azure_endpoint is required for Azure OpenAI")
+
+        kwargs["base_url"] = f"{creds.azure_endpoint}/openai/v1/"
+
+        # Optional: Add custom headers for Azure-specific features
+        # Only set api-version if explicitly provided by user
+        if creds.azure_api_version:
+            kwargs["default_headers"] = {"api-version": creds.azure_api_version}
+
+        # Authentication: API Key or Microsoft Entra ID
+        if creds.api_key:
+            kwargs["api_key"] = creds.api_key
+        else:
+            # Microsoft Entra ID token provider
+            try:
+                from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+
+                token_provider = get_bearer_token_provider(
+                    DefaultAzureCredential(),
+                    "https://cognitiveservices.azure.com/.default"
+                )
+                kwargs["api_key"] = token_provider
+            except ImportError as e:
+                raise ImportError(
+                    "azure-identity is required for Microsoft Entra ID authentication. "
+                    "Install it with: pip install azure-identity"
+                ) from e
+
+        return openai.OpenAI(**kwargs)
+    else:
+        # Regular OpenAI client
+        kwargs: dict[str, Any] = {}
+        if llm_config.credentials and llm_config.credentials.api_key:
+            kwargs["api_key"] = llm_config.credentials.api_key
+        return openai.OpenAI(**kwargs)
+
+
 def _build_common_params(
     llm_config: LLMConfig,
     messages: list[MessageType],
@@ -50,7 +102,8 @@ def _llm_basic(
 ) -> AIMessage:
     """Basic non-streaming LLM call."""
     params = _build_common_params(llm_config, messages, tools=tools)
-    response = openai.OpenAI().responses.create(**params)
+    client = _create_client(llm_config)
+    response = client.responses.create(**params)
     return _get_ai_message_from_oai_response(response)
 
 
@@ -61,7 +114,8 @@ def _llm_structured(
 ) -> OutputSchemaType:
     """Non-streaming structured LLM call."""
     params = _build_common_params(llm_config, messages, output_schema=output_schema)
-    response = openai.OpenAI().responses.parse(**params)
+    client = _create_client(llm_config)
+    response = client.responses.parse(**params)
     if response.output_parsed is None:
         raise ValueError("No parsed response received")
     return response.output_parsed
@@ -75,8 +129,9 @@ def _llm_stream(
     """Streaming LLM call."""
     params = _build_common_params(llm_config, messages, tools=tools)
     builder = OAIStreamMessageBuilder()
+    client = _create_client(llm_config)
 
-    with openai.OpenAI().responses.stream(**params) as stream:
+    with client.responses.stream(**params) as stream:
         for event in stream:
             yield _get_ai_message_from_oai_response(builder.add_event(event))
 
@@ -94,8 +149,9 @@ def _llm_structured_stream(
     """Streaming structured LLM call."""
     params = _build_common_params(llm_config, messages, output_schema=output_schema)
     builder = OAIStreamMessageBuilder()
+    client = _create_client(llm_config)
 
-    with openai.OpenAI().responses.stream(**params) as stream:
+    with client.responses.stream(**params) as stream:
         for event in stream:
             ai_message = _get_ai_message_from_oai_response(builder.add_event(event))
             partial_content = ""

@@ -1,6 +1,6 @@
 # ThinLLM
 
-A thin, unified wrapper for LLM interactions with support for multiple providers (OpenAI, Anthropic, AWS Bedrock, and Gemini).
+A thin, unified wrapper for LLM interactions with support for multiple providers (OpenAI, Azure OpenAI, Anthropic, AWS Bedrock, and Gemini).
 
 > **⚠️ Under Development**: This project is currently under active development. APIs may change, and some features may be incomplete or subject to modification.
 
@@ -17,6 +17,7 @@ A thin, unified wrapper for LLM interactions with support for multiple providers
   - [Function Calling](#function-calling--tools)
 - [Providers](#providers)
   - [OpenAI](#openai)
+  - [Azure OpenAI](#azure-openai)
   - [Anthropic](#anthropic-claude)
   - [AWS Bedrock](#aws-bedrock-anthropic-models)
   - [Google Gemini](#google-gemini)
@@ -29,7 +30,7 @@ A thin, unified wrapper for LLM interactions with support for multiple providers
 ## Features
 
 - **Single Function API**: One `llm()` function for all providers - no need to learn multiple APIs
-- **Provider Support**: OpenAI, Anthropic (Claude), AWS Bedrock, and Google Gemini
+- **Provider Support**: OpenAI, Azure OpenAI, Anthropic (Claude), AWS Bedrock, and Google Gemini
 - **Streaming**: Full support for streaming responses
 - **Structured Output**: Get Pydantic models directly from LLMs with type safety
 - **Function Calling**: Tool/function calling with automatic serialization
@@ -90,6 +91,9 @@ Install dependencies for the providers you want to use:
 # For OpenAI
 pip install thinllm[openai]
 
+# For Azure OpenAI
+pip install thinllm[azure-openai]
+
 # For Anthropic (Claude)
 pip install thinllm[anthropic]
 
@@ -112,6 +116,10 @@ export OPENAI_API_KEY=your-openai-key-here
 export ANTHROPIC_API_KEY=your-anthropic-key-here
 export GEMINI_API_KEY=your-gemini-key-here
 
+# Azure OpenAI credentials
+export AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+export AZURE_OPENAI_API_KEY=your-azure-api-key  # Optional if using Entra ID
+
 # AWS credentials (for Bedrock)
 export AWS_ACCESS_KEY_ID=your-aws-access-key
 export AWS_SECRET_ACCESS_KEY=your-aws-secret-key
@@ -124,6 +132,8 @@ Or create a `.env` file in your project:
 OPENAI_API_KEY=your-openai-key-here
 ANTHROPIC_API_KEY=your-anthropic-key-here
 GEMINI_API_KEY=your-gemini-key-here
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_OPENAI_API_KEY=your-azure-api-key
 AWS_ACCESS_KEY_ID=your-aws-access-key
 AWS_SECRET_ACCESS_KEY=your-aws-secret-key
 AWS_REGION=us-east-1
@@ -144,7 +154,7 @@ load_dotenv()
 
 # Configure your LLM
 config = LLMConfig(
-    provider="openai",  # or "anthropic", "bedrock_anthropic", "gemini"
+    provider="openai",  # or "azure_openai", "anthropic", "bedrock_anthropic", "gemini"
     model_id="gpt-4",
     params=ModelParams(temperature=0.7, max_output_tokens=1024)
 )
@@ -255,6 +265,66 @@ config = LLMConfig(
 
 **Setup**: Set `OPENAI_API_KEY` environment variable
 
+### Azure OpenAI
+
+Use OpenAI models through Azure's enterprise platform with enhanced security and compliance:
+
+```python
+from thinllm import Credentials
+
+# With API Key authentication
+config = LLMConfig(
+    provider="azure_openai",
+    model_id="gpt-4o",  # Your deployment name in Azure
+    params=ModelParams(
+        temperature=0.7,
+        max_output_tokens=4096
+    ),
+    credentials=Credentials(
+        azure_endpoint="https://your-resource.openai.azure.com",
+        api_key="your-azure-api-key"
+    )
+)
+
+# With Microsoft Entra ID (Azure AD) authentication
+config = LLMConfig(
+    provider="azure_openai",
+    model_id="gpt-4o",  # Your deployment name in Azure
+    params=ModelParams(
+        temperature=0.7,
+        max_output_tokens=4096
+    ),
+    credentials=Credentials(
+        azure_endpoint="https://your-resource.openai.azure.com",
+        # No api_key - will use DefaultAzureCredential
+    )
+)
+```
+
+**Supported Models**: Any OpenAI model deployed in your Azure OpenAI resource
+- `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-4`, `gpt-3.5-turbo`
+- Note: Use your Azure deployment name as `model_id`
+
+**Setup**: 
+1. Create an Azure OpenAI resource in Azure Portal
+2. Deploy a model and note the deployment name
+3. Get your endpoint URL from the resource
+4. Choose authentication:
+   - **API Key**: Get from "Keys and Endpoint" section in Azure Portal
+   - **Microsoft Entra ID**: Run `az login` or configure managed identity
+
+**Environment Variables**:
+```bash
+export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
+export AZURE_OPENAI_API_KEY="your-api-key"  # Optional if using Entra ID
+```
+
+**Authentication Options**:
+- **API Key**: Simple, good for development and testing
+- **Microsoft Entra ID**: Enterprise-grade, recommended for production
+  - Uses `DefaultAzureCredential` from `azure-identity`
+  - Supports: Azure CLI, managed identities, environment variables, and more
+
 ### Anthropic (Claude)
 
 ```python
@@ -315,16 +385,17 @@ config = LLMConfig(
 
 ### Provider Feature Comparison
 
-| Feature | OpenAI | Anthropic | Bedrock | Gemini |
-|---------|--------|-----------|---------|--------|
-| Basic Chat | ✅ | ✅ | ✅ | ✅ |
-| Streaming | ✅ | ✅ | ✅ | ✅ |
-| Structured Output | ✅ | ✅ | ✅ | ✅ |
-| Function Calling | ✅ | ✅ | ✅ | ✅ |
-| Vision (Images) | ✅ | ✅ | ✅ | ✅ |
-| Thinking Mode | ❌ | ❌ | ❌ | ✅ |
-| Built-in Search | ❌ | ❌ | ❌ | ✅ |
-| Code Execution | ❌ | ❌ | ❌ | ✅ |
+| Feature | OpenAI | Azure OpenAI | Anthropic | Bedrock | Gemini |
+|---------|--------|--------------|-----------|---------|--------|
+| Basic Chat | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Streaming | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Structured Output | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Function Calling | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Vision (Images) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Thinking Mode | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Built-in Search | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Code Execution | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Entra ID Auth | ❌ | ✅ | ❌ | ❌ | ❌ |
 
 #### Gemini-Specific Features
 
@@ -391,9 +462,10 @@ def llm(
 
 ```python
 class LLMConfig(BaseModel):
-    provider: str                           # "openai", "anthropic", "bedrock_anthropic", or "gemini"
+    provider: str                           # "openai", "azure_openai", "anthropic", "bedrock_anthropic", or "gemini"
     model_id: str                          # Model identifier (e.g., "gpt-4", "claude-sonnet-4")
     params: ModelParams | None = None      # Standard model parameters
+    credentials: Credentials | None = None # Optional credentials (required for Azure OpenAI)
     model_args: dict[str, Any] = {}        # Provider-specific arguments
 ```
 
@@ -429,6 +501,7 @@ class ModelParams(BaseModel):
 
 See the [`examples/`](examples/) directory for complete examples:
 
+- **`azure_openai_example.py`**: Azure OpenAI with API Key and Microsoft Entra ID authentication
 - **`gemini_example.py`**: Comprehensive Gemini provider examples with thinking mode
 - **`bedrock_example.py`**: AWS Bedrock integration examples
 - **`agent_example.py`**: Multi-turn conversations and tool usage patterns

@@ -104,6 +104,11 @@ class Credentials(BaseModel):
     aws_session_token: str | None = None
     aws_region: str | None = None
 
+    # Azure OpenAI specific credentials
+    azure_endpoint: str | None = None  # e.g., "https://my-resource.openai.azure.com"
+    azure_deployment: str | None = None  # Optional override for model_id
+    azure_api_version: str | None = None  # Optional API version (e.g., "2023-07-01-preview")
+
     model_config = ConfigDict(extra="allow")
 
 
@@ -266,7 +271,7 @@ class LLMConfig(BaseModel):
         """
         # Start with translated params
         match self.provider:
-            case Provider.OPENAI:
+            case Provider.OPENAI | Provider.AZURE_OPENAI:
                 result = ParamTranslator.to_openai(self.params)
             case Provider.ANTHROPIC | Provider.BEDROCK_ANTHROPIC:
                 result = ParamTranslator.to_anthropic(self.params)
@@ -340,6 +345,18 @@ def _create_builtin_preset(name: str) -> LLMConfig:
                 model_id="global.anthropic.claude-haiku-4-5-20251001-v1:0",
                 params=ModelParams(temperature=0.7, max_output_tokens=4096),
             )
+        case "azure-gpt-4o":
+            return LLMConfig(
+                provider=Provider.AZURE_OPENAI,
+                model_id="gpt-4o",  # Note: This is typically your deployment name
+                params=ModelParams(temperature=0.7, max_output_tokens=4096),
+            )
+        case "azure-gpt-4o-mini":
+            return LLMConfig(
+                provider=Provider.AZURE_OPENAI,
+                model_id="gpt-4o-mini",  # Note: This is typically your deployment name
+                params=ModelParams(temperature=0.7, max_output_tokens=4096),
+            )
         case _:
             raise KeyError(f"Unknown built-in preset: {name}")
 
@@ -355,6 +372,8 @@ BUILTIN_PRESET_NAMES = frozenset(
         "gpt4o-mini",
         "bedrock-claude-sonnet-4-5",
         "bedrock-claude-haiku-4-5",
+        "azure-gpt-4o",
+        "azure-gpt-4o-mini",
     ]
 )
 

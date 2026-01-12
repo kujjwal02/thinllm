@@ -163,7 +163,7 @@ def llm(
 
     # Lazy load and call the appropriate provider's llm function
     match provider:
-        case "openai":
+        case "openai" | "azure_openai":
             provider_llm = _get_openai_llm()
             return provider_llm(  # type: ignore[return-value]
                 llm_config, messages, output_schema=output_schema, tools=tools, stream=stream
@@ -188,5 +188,5 @@ def llm(
 
         case _:
             raise ValueError(
-                f"Unsupported provider: {provider}. Supported providers: openai, anthropic, bedrock_anthropic, gemini"
+                f"Unsupported provider: {provider}. Supported providers: openai, azure_openai, anthropic, bedrock_anthropic, gemini"
             )
