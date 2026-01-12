@@ -398,6 +398,58 @@ response = llm(config, [system_msg, user_msg])
 - Cache control is ignored by other providers (Anthropic-only feature)
 - Not supported for reasoning/thinking content blocks
 
+**Extended Thinking with Interleaved Thinking**:
+
+Anthropic's [extended thinking](https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking) allows Claude to reason before responding. With **interleaved thinking**, Claude can think between tool calls for more sophisticated multi-step reasoning.
+
+```python
+from thinllm import llm, LLMConfig, ModelParams, ThinkingConfig, UserMessage
+
+def get_weather(location: str) -> str:
+    """Get weather for a location."""
+    return f"Weather in {location}: Sunny, 72°F"
+
+def get_time(timezone: str) -> str:
+    """Get time for a timezone."""
+    return f"Time in {timezone}: 2:30 PM"
+
+# Configure with interleaved thinking
+config = LLMConfig(
+    provider="anthropic",
+    model_id="claude-sonnet-4-5",
+    params=ModelParams(
+        max_output_tokens=4096,
+        temperature=1.0,  # Required for thinking
+        thinking=ThinkingConfig(
+            enabled=True,
+            thinking_budget=10000,  # Can exceed max_output_tokens with interleaved
+            anthropic_interleaved_thinking=True,  # Enable interleaved thinking
+        ),
+    ),
+)
+
+messages = [
+    UserMessage(content="What's the weather in Paris, and what time is it there?")
+]
+
+# Claude will think between tool calls
+response = llm(config, messages, tools=[get_weather, get_time])
+```
+
+**Key Features:**
+- **Interleaved Thinking**: Claude can think between tool calls (set `anthropic_interleaved_thinking=True`)
+- **Flexible Token Budget**: With interleaved thinking, `thinking_budget` can exceed `max_output_tokens`
+- **Temperature Requirement**: Extended thinking requires `temperature=1.0`
+- **Beta API**: Automatically uses the beta API when interleaved thinking is enabled
+- **Bedrock Compatible**: Works with both Anthropic and Bedrock Anthropic providers
+
+**When to Use:**
+- Complex multi-step problems requiring planning
+- Tool use scenarios with multiple steps
+- Tasks that benefit from reflection between actions
+
+See `examples/anthropic_interleaved_thinking_example.py` for comprehensive examples.
+
 ### AWS Bedrock (Anthropic Models)
 
 Use Claude models through AWS Bedrock:
@@ -625,7 +677,7 @@ The following features are planned for ThinLLM. These are **up for grabs** - con
 
 - [ ] **Vertex AI Support**: Integration with Google Cloud's Vertex AI platform
 - [x] **Anthropic Caching**: Prompt caching support for improved performance and cost efficiency
-- [ ] **Anthropic Extended Thinking Support**: Enhanced reasoning capabilities
+- [x] **Anthropic Extended Thinking Support**: Enhanced reasoning capabilities with interleaved thinking
 - [ ] **Anthropic Support for Thinking with Structured Output**: Using beta API where applicable
 
 ### Multimodal Capabilities

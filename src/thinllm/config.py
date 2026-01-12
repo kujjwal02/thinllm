@@ -38,6 +38,7 @@ class ThinkingConfig(BaseModel):
     enabled: bool = False
     thinking_level: ThinkingLevel = ThinkingLevel.NONE
     thinking_budget: int | None = None
+    anthropic_interleaved_thinking: bool = False
 
     @field_validator("thinking_budget")
     @classmethod
@@ -197,18 +198,26 @@ class ParamTranslator:
         if params.thinking and params.thinking.enabled and params.thinking.thinking_budget:
             if params.temperature != 1:
                 raise ValueError("Thinking is only supported with temperature=1")
-            # max tokens must be greater than thinking budget
+            
+            # Validation: max_tokens check only applies when NOT using interleaved thinking
             if (
-                params.max_output_tokens is not None
+                not params.thinking.anthropic_interleaved_thinking
+                and params.max_output_tokens is not None
                 and params.max_output_tokens <= params.thinking.thinking_budget
             ):
                 raise ValueError(
                     f"max_output_tokens must be greater than thinking budget. max_output_tokens: {params.max_output_tokens}, thinking_budget: {params.thinking.thinking_budget}"
                 )
+            
             result["thinking"] = {
                 "budget_tokens": params.thinking.thinking_budget,
                 "type": "enabled",
             }
+            
+            # Add betas parameter for interleaved thinking
+            # The betas parameter is only supported by beta APIs
+            if params.thinking.anthropic_interleaved_thinking:
+                result["betas"] = ["interleaved-thinking-2025-05-14"]
 
         # Tool choice
         if params.tool_choice:

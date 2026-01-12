@@ -144,7 +144,7 @@ class TestConvertContentBlockToAnthropicDict:
     def test_convert_input_image_block_base64(self) -> None:
         """Test converting InputImageBlock with base64 source."""
         import base64
-        
+
         # Create a simple 1x1 pixel image bytes
         image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
         block = InputImageBlock(
@@ -162,7 +162,7 @@ class TestConvertContentBlockToAnthropicDict:
     def test_convert_input_image_block_base64_default_mimetype(self) -> None:
         """Test converting InputImageBlock with base64 source and default mimetype."""
         import base64
-        
+
         image_bytes = b"\xff\xd8\xff\xe0"  # JPEG header
         block = InputImageBlock(
             image_bytes=image_bytes,
@@ -183,28 +183,30 @@ class TestConvertContentBlockToAnthropicDict:
             image_bytes=image_bytes,
             mimetype="image/bmp",  # Unsupported
         )
-        
+
         with pytest.raises(ValueError, match="Unsupported image mimetype for Anthropic"):
             _convert_content_block_to_anthropic_dict(block)
 
     def test_convert_input_image_block_all_supported_mimetypes(self) -> None:
         """Test that all supported mimetypes work correctly."""
         import base64
-        
+
         supported_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
         image_bytes = b"\x00\x01\x02\x03"
-        
+
         for media_type in supported_types:
             block = InputImageBlock(
                 image_bytes=image_bytes,
                 mimetype=media_type,
             )
             result = _convert_content_block_to_anthropic_dict(block)
-            
+
             assert result["type"] == "image"
             assert result["source"]["type"] == "base64"
             assert result["source"]["media_type"] == media_type
-            assert result["source"]["data"] == base64.standard_b64encode(image_bytes).decode("utf-8")
+            assert result["source"]["data"] == base64.standard_b64encode(image_bytes).decode(
+                "utf-8"
+            )
 
 
 class TestCacheControl:
@@ -214,12 +216,10 @@ class TestCacheControl:
         """Test text block with cache control using default TTL."""
         block = InputTextBlock(
             text="Cached content",
-            extra=ContentExtra(
-                anthropic_cache_control=AnthropicCacheControl()
-            ),
+            extra=ContentExtra(anthropic_cache_control=AnthropicCacheControl()),
         )
         result = _convert_content_block_to_anthropic_dict(block)
-        
+
         assert result["type"] == "text"
         assert result["text"] == "Cached content"
         assert "cache_control" in result
@@ -230,12 +230,10 @@ class TestCacheControl:
         """Test text block with 5 minute cache TTL."""
         block = InputTextBlock(
             text="Short-lived cache",
-            extra=ContentExtra(
-                anthropic_cache_control=AnthropicCacheControl(ttl="5m")
-            ),
+            extra=ContentExtra(anthropic_cache_control=AnthropicCacheControl(ttl="5m")),
         )
         result = _convert_content_block_to_anthropic_dict(block)
-        
+
         assert result["cache_control"]["type"] == "ephemeral"
         assert result["cache_control"]["ttl"] == "5m"
 
@@ -243,12 +241,10 @@ class TestCacheControl:
         """Test text block with 1 hour cache TTL."""
         block = OutputTextBlock(
             text="Long-lived cache",
-            extra=ContentExtra(
-                anthropic_cache_control=AnthropicCacheControl(ttl="1h")
-            ),
+            extra=ContentExtra(anthropic_cache_control=AnthropicCacheControl(ttl="1h")),
         )
         result = _convert_content_block_to_anthropic_dict(block)
-        
+
         assert result["cache_control"]["type"] == "ephemeral"
         assert result["cache_control"]["ttl"] == "1h"
 
@@ -256,31 +252,27 @@ class TestCacheControl:
         """Test text block with cache control disabled."""
         block = InputTextBlock(
             text="Not cached",
-            extra=ContentExtra(
-                anthropic_cache_control=AnthropicCacheControl(enabled=False)
-            ),
+            extra=ContentExtra(anthropic_cache_control=AnthropicCacheControl(enabled=False)),
         )
         result = _convert_content_block_to_anthropic_dict(block)
-        
+
         assert "cache_control" not in result
 
     def test_text_block_without_cache_control(self) -> None:
         """Test text block without any cache control."""
         block = InputTextBlock(text="Regular text")
         result = _convert_content_block_to_anthropic_dict(block)
-        
+
         assert "cache_control" not in result
 
     def test_image_block_with_cache_control_url(self) -> None:
         """Test image block with URL and cache control."""
         block = InputImageBlock(
             image_url="https://example.com/image.jpg",
-            extra=ContentExtra(
-                anthropic_cache_control=AnthropicCacheControl(ttl="1h")
-            ),
+            extra=ContentExtra(anthropic_cache_control=AnthropicCacheControl(ttl="1h")),
         )
         result = _convert_content_block_to_anthropic_dict(block)
-        
+
         assert result["type"] == "image"
         assert "cache_control" in result
         assert result["cache_control"]["type"] == "ephemeral"
@@ -292,12 +284,10 @@ class TestCacheControl:
         block = InputImageBlock(
             image_bytes=image_bytes,
             mimetype="image/png",
-            extra=ContentExtra(
-                anthropic_cache_control=AnthropicCacheControl()
-            ),
+            extra=ContentExtra(anthropic_cache_control=AnthropicCacheControl()),
         )
         result = _convert_content_block_to_anthropic_dict(block)
-        
+
         assert result["type"] == "image"
         assert "cache_control" in result
         assert result["cache_control"]["type"] == "ephemeral"
@@ -308,12 +298,10 @@ class TestCacheControl:
             tool_id="call_123",
             name="test_tool",
             input={"param": "value"},
-            extra=ContentExtra(
-                anthropic_cache_control=AnthropicCacheControl(ttl="5m")
-            ),
+            extra=ContentExtra(anthropic_cache_control=AnthropicCacheControl(ttl="5m")),
         )
         result = _convert_content_block_to_anthropic_dict(block)
-        
+
         assert result["type"] == "tool_use"
         assert "cache_control" in result
         assert result["cache_control"]["type"] == "ephemeral"
@@ -325,12 +313,10 @@ class TestCacheControl:
             tool_id="call_456",
             name="test_tool",
             output="Tool output",
-            extra=ContentExtra(
-                anthropic_cache_control=AnthropicCacheControl(ttl="1h")
-            ),
+            extra=ContentExtra(anthropic_cache_control=AnthropicCacheControl(ttl="1h")),
         )
         result = _convert_content_block_to_anthropic_dict(block)
-        
+
         assert result["type"] == "tool_result"
         assert "cache_control" in result
         assert result["cache_control"]["type"] == "ephemeral"
@@ -342,12 +328,10 @@ class TestCacheControl:
             signature="sig123",
             summaries=["Summary"],
             contents=["Content"],
-            extra=ContentExtra(
-                anthropic_cache_control=AnthropicCacheControl(ttl="1h")
-            ),
+            extra=ContentExtra(anthropic_cache_control=AnthropicCacheControl(ttl="1h")),
         )
         result = _convert_content_block_to_anthropic_dict(block)
-        
+
         assert result["type"] == "thinking"
         # Cache control should NOT be present for reasoning content
         assert "cache_control" not in result
@@ -356,12 +340,10 @@ class TestCacheControl:
         """Test that redacted ReasoningContent never gets cache control."""
         block = ReasoningContent(
             redacted_content="redacted",
-            extra=ContentExtra(
-                anthropic_cache_control=AnthropicCacheControl(ttl="1h")
-            ),
+            extra=ContentExtra(anthropic_cache_control=AnthropicCacheControl(ttl="1h")),
         )
         result = _convert_content_block_to_anthropic_dict(block)
-        
+
         assert result["type"] == "redacted_thinking"
         # Cache control should NOT be present for reasoning content
         assert "cache_control" not in result
@@ -521,7 +503,7 @@ class TestGetAnthropicMessages:
     def test_user_message_with_image_base64(self) -> None:
         """Test user message with base64 image."""
         import base64
-        
+
         image_bytes = b"\x89PNG\r\n\x1a\n"
         messages = [
             UserMessage(
@@ -539,7 +521,9 @@ class TestGetAnthropicMessages:
         assert result[0]["content"][0]["type"] == "image"
         assert result[0]["content"][0]["source"]["type"] == "base64"
         assert result[0]["content"][0]["source"]["media_type"] == "image/png"
-        assert result[0]["content"][0]["source"]["data"] == base64.standard_b64encode(image_bytes).decode("utf-8")
+        assert result[0]["content"][0]["source"]["data"] == base64.standard_b64encode(
+            image_bytes
+        ).decode("utf-8")
         assert result[0]["content"][1]["type"] == "text"
         assert result[0]["content"][1]["text"] == "What's in this image?"
 
@@ -577,7 +561,7 @@ class TestGetSystemBlocksFromMessages:
         """Test extracting system from single system message with string."""
         messages = [SystemMessage(content="You are a helpful assistant.")]
         result = _get_system_blocks_from_messages(messages)
-        
+
         assert len(result) == 1
         assert result[0]["type"] == "text"
         assert result[0]["text"] == "You are a helpful assistant."
@@ -587,7 +571,7 @@ class TestGetSystemBlocksFromMessages:
         """Test extracting system from system message with TextBlock in list."""
         messages = [SystemMessage(content=[InputTextBlock(text="You are helpful.")])]
         result = _get_system_blocks_from_messages(messages)
-        
+
         assert len(result) == 1
         assert result[0]["type"] == "text"
         assert result[0]["text"] == "You are helpful."
@@ -601,7 +585,7 @@ class TestGetSystemBlocksFromMessages:
             UserMessage(content="User message"),
         ]
         result = _get_system_blocks_from_messages(messages)
-        
+
         assert len(result) == 2
         assert result[0]["text"] == "First instruction."
         assert result[1]["text"] == "Second instruction."
@@ -614,7 +598,7 @@ class TestGetSystemBlocksFromMessages:
             )
         ]
         result = _get_system_blocks_from_messages(messages)
-        
+
         assert len(result) == 2
         assert result[0]["text"] == "First part."
         assert result[1]["text"] == "Second part."
@@ -639,19 +623,17 @@ class TestGetSystemBlocksFromMessages:
                     InputTextBlock(text="Regular text."),
                     InputTextBlock(
                         text="Cached text.",
-                        extra=ContentExtra(
-                            anthropic_cache_control=AnthropicCacheControl()
-                        ),
+                        extra=ContentExtra(anthropic_cache_control=AnthropicCacheControl()),
                     ),
                 ]
             )
         ]
         result = _get_system_blocks_from_messages(messages)
-        
+
         assert len(result) == 2
         assert result[0]["text"] == "Regular text."
         assert "cache_control" not in result[0]
-        
+
         assert result[1]["text"] == "Cached text."
         assert "cache_control" in result[1]
         assert result[1]["cache_control"]["type"] == "ephemeral"
@@ -664,15 +646,13 @@ class TestGetSystemBlocksFromMessages:
                 content=[
                     InputTextBlock(
                         text="Long-lived cache.",
-                        extra=ContentExtra(
-                            anthropic_cache_control=AnthropicCacheControl(ttl="1h")
-                        ),
+                        extra=ContentExtra(anthropic_cache_control=AnthropicCacheControl(ttl="1h")),
                     ),
                 ]
             )
         ]
         result = _get_system_blocks_from_messages(messages)
-        
+
         assert len(result) == 1
         assert result[0]["text"] == "Long-lived cache."
         assert result[0]["cache_control"]["type"] == "ephemeral"
@@ -693,7 +673,7 @@ class TestGetSystemBlocksFromMessages:
             )
         ]
         result = _get_system_blocks_from_messages(messages)
-        
+
         assert len(result) == 1
         assert result[0]["text"] == "Not cached."
         assert "cache_control" not in result[0]
@@ -744,3 +724,97 @@ class TestGetAnthropicTool:
         assert "Add two numbers" in result["description"]
         assert "input_schema" in result
         assert isinstance(result["input_schema"], dict)
+
+
+def test_interleaved_thinking_config() -> None:
+    """Test that interleaved thinking config is properly handled."""
+    from thinllm.config import LLMConfig, ModelParams, Provider, ThinkingConfig
+
+    config = LLMConfig(
+        provider=Provider.ANTHROPIC,
+        model_id="claude-sonnet-4-5",
+        params=ModelParams(
+            max_output_tokens=4096,
+            temperature=1.0,
+            thinking=ThinkingConfig(
+                enabled=True,
+                thinking_budget=8000,  # Can exceed max_output_tokens with interleaved
+                anthropic_interleaved_thinking=True,
+            ),
+        ),
+    )
+
+    effective = config.get_effective_params()
+    assert effective["thinking"]["budget_tokens"] == 8000
+    assert "betas" in effective
+    assert "interleaved-thinking-2025-05-14" in effective["betas"]
+
+
+def test_interleaved_thinking_config_without_interleaved() -> None:
+    """Test that regular thinking config works without interleaved thinking."""
+    from thinllm.config import LLMConfig, ModelParams, Provider, ThinkingConfig
+
+    config = LLMConfig(
+        provider=Provider.ANTHROPIC,
+        model_id="claude-sonnet-4-5",
+        params=ModelParams(
+            max_output_tokens=4096,
+            temperature=1.0,
+            thinking=ThinkingConfig(
+                enabled=True,
+                thinking_budget=2000,  # Must be less than max_output_tokens
+                anthropic_interleaved_thinking=False,
+            ),
+        ),
+    )
+
+    effective = config.get_effective_params()
+    assert effective["thinking"]["budget_tokens"] == 2000
+    assert "betas" not in effective
+
+
+def test_interleaved_thinking_max_tokens_validation() -> None:
+    """Test that max_tokens validation is skipped for interleaved thinking."""
+    from thinllm.config import LLMConfig, ModelParams, Provider, ThinkingConfig
+
+    # This should NOT raise an error with interleaved thinking
+    config = LLMConfig(
+        provider=Provider.ANTHROPIC,
+        model_id="claude-sonnet-4-5",
+        params=ModelParams(
+            max_output_tokens=4096,
+            temperature=1.0,
+            thinking=ThinkingConfig(
+                enabled=True,
+                thinking_budget=10000,  # Exceeds max_output_tokens
+                anthropic_interleaved_thinking=True,
+            ),
+        ),
+    )
+
+    effective = config.get_effective_params()
+    assert effective["thinking"]["budget_tokens"] == 10000
+    assert "betas" in effective
+
+
+def test_non_interleaved_thinking_max_tokens_validation() -> None:
+    """Test that max_tokens validation is enforced for non-interleaved thinking."""
+    from thinllm.config import LLMConfig, ModelParams, Provider, ThinkingConfig
+
+    # This SHOULD raise an error without interleaved thinking
+    config = LLMConfig(
+        provider=Provider.ANTHROPIC,
+        model_id="claude-sonnet-4-5",
+        params=ModelParams(
+            max_output_tokens=4096,
+            temperature=1.0,
+            thinking=ThinkingConfig(
+                enabled=True,
+                thinking_budget=5000,  # Exceeds max_output_tokens
+                anthropic_interleaved_thinking=False,
+            ),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="max_output_tokens must be greater than thinking budget"):
+        config.get_effective_params()

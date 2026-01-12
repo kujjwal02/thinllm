@@ -51,6 +51,33 @@ def _create_client(llm_config: LLMConfig) -> anthropic.Anthropic | Any:
         return anthropic.Anthropic()
 
 
+def _get_messages_api(client: anthropic.Anthropic | Any, params: dict[str, Any]) -> Any:
+    """
+    Get the appropriate messages API (regular or beta) based on params.
+
+    If the params contain a 'betas' key, use client.beta.messages, otherwise use client.messages.
+    The betas parameter is only supported by beta APIs.
+
+    Args:
+        client: Anthropic or AnthropicBedrock client
+        params: API parameters that may contain 'betas'
+
+    Returns:
+        The messages API object (client.messages or client.beta.messages)
+
+    Raises:
+        ValueError: If beta features are requested but client doesn't support beta API
+    """
+    if "betas" in params:
+        if not hasattr(client, "beta"):
+            raise ValueError(
+                f"Beta features requested but client doesn't support beta API. "
+                f"Beta headers: {params['betas']}"
+            )
+        return client.beta.messages
+    return client.messages
+
+
 def _build_common_params(
     llm_config: LLMConfig,
     messages: list[MessageType],
@@ -101,7 +128,11 @@ def _llm_basic(
     """Basic non-streaming LLM call."""
     params = _build_common_params(llm_config, messages, tools=tools)
     client = _create_client(llm_config)
-    response = client.messages.create(**params)
+    
+    # Get the appropriate API (messages or beta.messages)
+    messages_api = _get_messages_api(client, params)
+    response = messages_api.create(**params)
+    
     return _get_ai_message_from_anthropic_response(response)
 
 
@@ -113,7 +144,10 @@ def _llm_structured(
     """Non-streaming structured LLM call."""
     params = _build_common_params(llm_config, messages, output_schema=output_schema)
     client = _create_client(llm_config)
-    response = client.messages.create(**params)
+    
+    # Get the appropriate API (messages or beta.messages)
+    messages_api = _get_messages_api(client, params)
+    response = messages_api.create(**params)
 
     # Extract the tool call result
     for content in response.content:
@@ -133,7 +167,10 @@ def _llm_stream(
     builder = AnthropicStreamMessageBuilder()
     client = _create_client(llm_config)
 
-    with client.messages.stream(**params) as stream:
+    # Get the appropriate API (messages or beta.messages)
+    messages_api = _get_messages_api(client, params)
+    
+    with messages_api.stream(**params) as stream:
         for event in stream:
             builder.add_event(event)
             yield _get_ai_message_from_anthropic_response(builder.response)
@@ -154,7 +191,10 @@ def _llm_structured_stream(  # type: ignore[misc]
     builder = AnthropicStreamMessageBuilder()
     client = _create_client(llm_config)
 
-    with client.messages.stream(**params) as stream:
+    # Get the appropriate API (messages or beta.messages)
+    messages_api = _get_messages_api(client, params)
+    
+    with messages_api.stream(**params) as stream:
         for event in stream:
             builder.add_event(event)
             ai_message = _get_ai_message_from_anthropic_response(builder.response)
