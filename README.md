@@ -2,6 +2,8 @@
 
 A thin, unified wrapper for LLM interactions with support for multiple providers (OpenAI, Anthropic, AWS Bedrock, and Gemini).
 
+> **⚠️ Under Development**: This project is currently under active development. APIs may change, and some features may be incomplete or subject to modification.
+
 ## Table of Contents
 
 - [Features](#features)
