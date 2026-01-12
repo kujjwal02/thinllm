@@ -560,6 +560,58 @@ export AWS_REGION=us-east-1
 # "global.anthropic.claude-sonnet-4-5-20250929-v1:0"  # Global
 ```
 
+## Roadmap
+
+The following features are planned for ThinLLM. These are **up for grabs** - contributions are welcome!
+
+### Provider Enhancements
+
+- [ ] **Vertex AI Support**: Integration with Google Cloud's Vertex AI platform
+- [ ] **Anthropic Caching**: Prompt caching support for improved performance and cost efficiency
+- [ ] **Anthropic Extended Thinking Support**: Enhanced reasoning capabilities
+- [ ] **Anthropic Support for Thinking with Structured Output**: Using beta API where applicable
+
+### Multimodal Capabilities
+
+- [ ] **Image Generation Support**: Native support for image generation across providers
+
+### Tool & Function Capabilities
+
+- [ ] **Auto Function Call Support**: Automatic execution of function calls
+- [ ] **MCP Support**: Model Context Protocol integration
+- [ ] **Computer Use Support**: Anthropic's computer use capabilities
+
+### Built-in Server Tools
+
+- [ ] **Search Tool**: Web search capabilities
+- [ ] **Fetch Tool**: URL fetching and content retrieval
+- [ ] **Code Executor**: Safe code execution environment
+
+### Provider-Specific Tools
+
+#### Anthropic Tools
+- [ ] **Tool Search Tool**: Anthropic's search tool integration
+- [ ] **Memory Tool**: Persistent memory capabilities
+- [ ] **Text Editor Tool**: Advanced text editing
+- [ ] **Bash Tool**: Command-line execution
+
+#### Gemini Tools
+- [ ] **Google Maps Integration**: Location and mapping features
+- [ ] **URL Context**: Enhanced URL processing
+
+### Response Features
+
+- [ ] **Citation Support**: Source attribution and citation tracking
+- [ ] **Raw Response in AI Message**: Access to raw API responses
+
+### Additional Capabilities
+
+- [ ] **Embedding Support**: Text embedding generation across providers
+- [ ] **Observability Platforms**: 
+  - [ ] Langfuse integration
+  - [ ] Langsmith integration
+  - [ ] Additional observability platforms
+
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on:
