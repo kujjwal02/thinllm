@@ -125,8 +125,8 @@ split-on-trailing-comma = true
 
 [lint.per-file-ignores]
 "*.ipynb" = ["T201", "I001", "F401", "Q000"]
-"*/tests/**/*.py" = ["S101"]
-"tests/**/*.py" = ["S101"]
+"*/tests/**/*.py" = ["S101", "PLR2004"]
+"tests/**/*.py" = ["S101", "PLR2004"]
 
 [format]
 # Like Black, use double quotes for strings.

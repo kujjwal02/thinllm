@@ -1,7 +1,9 @@
 """Internal utility functions for LLM service interactions."""
 
 import logging
+import mimetypes
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 import jiter
@@ -175,6 +177,63 @@ def _build_tool_result(tool_call: "ToolCallContent", result: Any) -> "ToolResult
         metadata=metadata if metadata else None,
     )
     return ToolResultContent(**result_kwargs)
+
+
+def load_image_from_file(filepath: str) -> tuple[bytes, str]:
+    """
+    Load an image from a file path and detect its mimetype.
+
+    Args:
+        filepath: Path to the image file
+
+    Returns:
+        Tuple of (image_bytes, mimetype)
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist
+        ValueError: If the mimetype cannot be determined
+
+    Example:
+        >>> image_bytes, mimetype = load_image_from_file("path/to/image.jpg")
+        >>> print(mimetype)
+        'image/jpeg'
+    """
+    file_path = Path(filepath)
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"Image file not found: {filepath}")
+
+    # Read the image file in binary mode
+    with file_path.open("rb") as f:
+        image_bytes = f.read()
+
+    # Detect mimetype from file extension
+    mimetype, _ = mimetypes.guess_type(str(file_path))
+
+    # If mimetype couldn't be determined, try to infer from extension
+    if mimetype is None:
+        ext = file_path.suffix.lower()
+        # Common image mimetypes
+        mimetype_map = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".bmp": "image/bmp",
+            ".tiff": "image/tiff",
+            ".tif": "image/tiff",
+            ".svg": "image/svg+xml",
+        }
+        mimetype = mimetype_map.get(ext)
+
+    if mimetype is None:
+        raise ValueError(
+            f"Could not determine mimetype for file: {filepath}. "
+            f"Ensure the file has a valid image extension."
+        )
+
+    return image_bytes, mimetype
 
 
 def get_tool_result(

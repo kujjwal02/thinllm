@@ -131,8 +131,22 @@ class ParamTranslator:
             result["stop"] = params.stop_sequences
 
         # Thinking -> Reasoning (OpenAI o1/o3 style)
-        if params.thinking and params.thinking.enabled and params.thinking.thinking_budget:
-            result["reasoning"] = {"budget_tokens": params.thinking.thinking_budget}
+        if params.thinking and params.thinking.enabled:
+            if not params.thinking.thinking_level:
+                raise ValueError("thinking_level is required when thinking is enabled")
+            if params.temperature is not None:
+                raise ValueError("temperature is not supported for OpenAI when thinking is enabled")
+            # Thinking budget is not supported for OpenAI
+            if params.thinking.thinking_budget:
+                warnings.warn(
+                    "thinking_budget is not supported for OpenAI, ignoring",
+                    UserWarning,
+                    stacklevel=3,
+                )
+            result["reasoning"] = {
+                "effort": params.thinking.thinking_level.value,
+                "summary": "concise",
+            }
 
         # Tool choice
         if params.tool_choice:
@@ -181,7 +195,20 @@ class ParamTranslator:
 
         # Thinking (Anthropic extended thinking)
         if params.thinking and params.thinking.enabled and params.thinking.thinking_budget:
-            result["thinking"] = {"budget_tokens": params.thinking.thinking_budget}
+            if params.temperature != 1:
+                raise ValueError("Thinking is only supported with temperature=1")
+            # max tokens must be greater than thinking budget
+            if (
+                params.max_output_tokens is not None
+                and params.max_output_tokens <= params.thinking.thinking_budget
+            ):
+                raise ValueError(
+                    f"max_output_tokens must be greater than thinking budget. max_output_tokens: {params.max_output_tokens}, thinking_budget: {params.thinking.thinking_budget}"
+                )
+            result["thinking"] = {
+                "budget_tokens": params.thinking.thinking_budget,
+                "type": "enabled",
+            }
 
         # Tool choice
         if params.tool_choice:

@@ -76,6 +76,7 @@ class InputImageBlock(BaseContentBlock):
     type: Literal["input_image"] = "input_image"
     image_url: str | None = None
     image_bytes: bytes | None = None
+    mimetype: str | None = None
     detail: ImageDetail = ImageDetail.AUTO
 
     @model_validator(mode="after")
@@ -83,6 +84,26 @@ class InputImageBlock(BaseContentBlock):
         if self.image_url is None and self.image_bytes is None:
             raise ValueError("Either image_url or image_bytes must be provided")
         return self
+
+    @classmethod
+    def from_file(cls, filepath: str, detail: ImageDetail = ImageDetail.AUTO) -> "InputImageBlock":
+        """
+        Load an image from a file path.
+
+        Args:
+            filepath: Path to the image file
+            detail: Detail level for image processing (default: AUTO)
+
+        Returns:
+            InputImageBlock with the loaded image data
+
+        Example:
+            >>> image_block = InputImageBlock.from_file("path/to/image.jpg")
+        """
+        from thinllm.utils import load_image_from_file
+
+        image_bytes, mimetype = load_image_from_file(filepath)
+        return cls(image_bytes=image_bytes, mimetype=mimetype, detail=detail)
 
 
 class ToolOutputStatus(StrEnum):

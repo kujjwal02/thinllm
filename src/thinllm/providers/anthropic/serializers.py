@@ -6,6 +6,7 @@ from typing import Any
 from thinllm.messages import (
     AIMessage,
     ContentBlock,
+    InputImageBlock,
     InputTextBlock,
     MessageType,
     OutputTextBlock,
@@ -18,7 +19,7 @@ from thinllm.messages import (
 from thinllm.tools import Tool
 
 
-def _convert_content_block_to_anthropic_dict(block: ContentBlock) -> dict:
+def _convert_content_block_to_anthropic_dict(block: ContentBlock) -> dict:  # noqa: C901
     """
     Convert a single ContentBlock to Anthropic content object format.
 
@@ -70,6 +71,46 @@ def _convert_content_block_to_anthropic_dict(block: ContentBlock) -> dict:
                 "content": block.output,
                 "is_error": block.status.value == "failure",
             }
+        case InputImageBlock():
+            import base64
+
+            # Validate mimetype for Anthropic
+            supported_mimetypes = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+            if block.mimetype and block.mimetype not in supported_mimetypes:
+                raise ValueError(
+                    f"Unsupported image mimetype for Anthropic: {block.mimetype}. "
+                    f"Supported types: {', '.join(supported_mimetypes)}"
+                )
+
+            # Handle URL-based images
+            if block.image_url:
+                return {
+                    "type": "image",
+                    "source": {
+                        "type": "url",
+                        "url": block.image_url,
+                    },
+                }
+
+            # Handle base64-encoded images
+            if block.image_bytes:
+                # Default to image/jpeg if no mimetype is provided
+                media_type = block.mimetype or "image/jpeg"
+
+                # Encode bytes to base64 string
+                base64_data = base64.standard_b64encode(block.image_bytes).decode("utf-8")
+
+                return {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": base64_data,
+                    },
+                }
+
+            # This shouldn't happen due to model validation, but just in case
+            raise ValueError("InputImageBlock must have either image_url or image_bytes")
         case _:
             raise ValueError(f"Unsupported content block type for Anthropic: {type(block)}")
 
@@ -126,6 +167,8 @@ def _get_anthropic_messages(messages: list[MessageType]) -> list[dict[str, Any]]
                         "content": content_list,
                     }
                 )
+            case _:
+                raise TypeError(f"Unsupported message type for Anthropic: {type(message)}")
     return result
 
 

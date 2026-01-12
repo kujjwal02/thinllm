@@ -2,11 +2,9 @@
 
 import pytest
 
-# Mark all tests in this module as Anthropic-specific
-pytestmark = [pytest.mark.unit, pytest.mark.anthropic]
-
 from thinllm.messages import (
     AIMessage,
+    InputImageBlock,
     InputTextBlock,
     OutputTextBlock,
     ReasoningContent,
@@ -23,6 +21,9 @@ from thinllm.providers.anthropic.serializers import (
     _get_system_from_messages,
 )
 from thinllm.tools import Tool
+
+# Mark all tests in this module as Anthropic-specific
+pytestmark = [pytest.mark.unit, pytest.mark.anthropic]
 
 
 class TestConvertContentBlockToAnthropicDict:
@@ -125,6 +126,83 @@ class TestConvertContentBlockToAnthropicDict:
         assert result["tool_use_id"] == "call_789"
         assert result["content"] == "Error occurred"
         assert result["is_error"] is True
+
+    def test_convert_input_image_block_url(self) -> None:
+        """Test converting InputImageBlock with URL source."""
+        block = InputImageBlock(
+            image_url="https://example.com/image.jpg",
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+
+        assert isinstance(result, dict)
+        assert result["type"] == "image"
+        assert result["source"]["type"] == "url"
+        assert result["source"]["url"] == "https://example.com/image.jpg"
+
+    def test_convert_input_image_block_base64(self) -> None:
+        """Test converting InputImageBlock with base64 source."""
+        import base64
+        
+        # Create a simple 1x1 pixel image bytes
+        image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+        block = InputImageBlock(
+            image_bytes=image_bytes,
+            mimetype="image/png",
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+
+        assert isinstance(result, dict)
+        assert result["type"] == "image"
+        assert result["source"]["type"] == "base64"
+        assert result["source"]["media_type"] == "image/png"
+        assert result["source"]["data"] == base64.standard_b64encode(image_bytes).decode("utf-8")
+
+    def test_convert_input_image_block_base64_default_mimetype(self) -> None:
+        """Test converting InputImageBlock with base64 source and default mimetype."""
+        import base64
+        
+        image_bytes = b"\xff\xd8\xff\xe0"  # JPEG header
+        block = InputImageBlock(
+            image_bytes=image_bytes,
+            # No mimetype provided, should default to image/jpeg
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+
+        assert isinstance(result, dict)
+        assert result["type"] == "image"
+        assert result["source"]["type"] == "base64"
+        assert result["source"]["media_type"] == "image/jpeg"
+        assert result["source"]["data"] == base64.standard_b64encode(image_bytes).decode("utf-8")
+
+    def test_convert_input_image_block_unsupported_mimetype(self) -> None:
+        """Test that unsupported mimetypes raise ValueError."""
+        image_bytes = b"\x00\x01\x02\x03"
+        block = InputImageBlock(
+            image_bytes=image_bytes,
+            mimetype="image/bmp",  # Unsupported
+        )
+        
+        with pytest.raises(ValueError, match="Unsupported image mimetype for Anthropic"):
+            _convert_content_block_to_anthropic_dict(block)
+
+    def test_convert_input_image_block_all_supported_mimetypes(self) -> None:
+        """Test that all supported mimetypes work correctly."""
+        import base64
+        
+        supported_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+        image_bytes = b"\x00\x01\x02\x03"
+        
+        for media_type in supported_types:
+            block = InputImageBlock(
+                image_bytes=image_bytes,
+                mimetype=media_type,
+            )
+            result = _convert_content_block_to_anthropic_dict(block)
+            
+            assert result["type"] == "image"
+            assert result["source"]["type"] == "base64"
+            assert result["source"]["media_type"] == media_type
+            assert result["source"]["data"] == base64.standard_b64encode(image_bytes).decode("utf-8")
 
 
 class TestGetAnthropicMessages:
@@ -256,6 +334,78 @@ class TestGetAnthropicMessages:
         assert result[1]["content"][0]["text"] == "AI response"
         assert result[2]["role"] == "user"
         assert result[2]["content"][0]["text"] == "Follow-up"
+
+    def test_user_message_with_image_url(self) -> None:
+        """Test user message with image URL."""
+        messages = [
+            UserMessage(
+                content=[
+                    InputImageBlock(image_url="https://example.com/image.jpg"),
+                    InputTextBlock(text="Describe this image."),
+                ]
+            )
+        ]
+        result = _get_anthropic_messages(messages)
+
+        assert len(result) == 1
+        assert result[0]["role"] == "user"
+        assert len(result[0]["content"]) == 2
+        assert result[0]["content"][0]["type"] == "image"
+        assert result[0]["content"][0]["source"]["type"] == "url"
+        assert result[0]["content"][0]["source"]["url"] == "https://example.com/image.jpg"
+        assert result[0]["content"][1]["type"] == "text"
+        assert result[0]["content"][1]["text"] == "Describe this image."
+
+    def test_user_message_with_image_base64(self) -> None:
+        """Test user message with base64 image."""
+        import base64
+        
+        image_bytes = b"\x89PNG\r\n\x1a\n"
+        messages = [
+            UserMessage(
+                content=[
+                    InputImageBlock(image_bytes=image_bytes, mimetype="image/png"),
+                    InputTextBlock(text="What's in this image?"),
+                ]
+            )
+        ]
+        result = _get_anthropic_messages(messages)
+
+        assert len(result) == 1
+        assert result[0]["role"] == "user"
+        assert len(result[0]["content"]) == 2
+        assert result[0]["content"][0]["type"] == "image"
+        assert result[0]["content"][0]["source"]["type"] == "base64"
+        assert result[0]["content"][0]["source"]["media_type"] == "image/png"
+        assert result[0]["content"][0]["source"]["data"] == base64.standard_b64encode(image_bytes).decode("utf-8")
+        assert result[0]["content"][1]["type"] == "text"
+        assert result[0]["content"][1]["text"] == "What's in this image?"
+
+    def test_user_message_with_multiple_images(self) -> None:
+        """Test user message with multiple images."""
+        messages = [
+            UserMessage(
+                content=[
+                    InputTextBlock(text="Image 1:"),
+                    InputImageBlock(image_url="https://example.com/image1.jpg"),
+                    InputTextBlock(text="Image 2:"),
+                    InputImageBlock(image_url="https://example.com/image2.jpg"),
+                    InputTextBlock(text="Compare these images."),
+                ]
+            )
+        ]
+        result = _get_anthropic_messages(messages)
+
+        assert len(result) == 1
+        assert result[0]["role"] == "user"
+        assert len(result[0]["content"]) == 5
+        assert result[0]["content"][0]["type"] == "text"
+        assert result[0]["content"][1]["type"] == "image"
+        assert result[0]["content"][1]["source"]["url"] == "https://example.com/image1.jpg"
+        assert result[0]["content"][2]["type"] == "text"
+        assert result[0]["content"][3]["type"] == "image"
+        assert result[0]["content"][3]["source"]["url"] == "https://example.com/image2.jpg"
+        assert result[0]["content"][4]["type"] == "text"
 
 
 class TestGetSystemFromMessages:

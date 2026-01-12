@@ -53,8 +53,7 @@ def _create_client(llm_config: LLMConfig) -> openai.OpenAI:
                 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
                 token_provider = get_bearer_token_provider(
-                    DefaultAzureCredential(),
-                    "https://cognitiveservices.azure.com/.default"
+                    DefaultAzureCredential(), "https://cognitiveservices.azure.com/.default"
                 )
                 kwargs["api_key"] = token_provider
             except ImportError as e:
@@ -157,12 +156,10 @@ def _llm_structured_stream(
             partial_content = ""
             if isinstance(ai_message.content, str):
                 partial_content = ai_message.content
-            elif (
-                isinstance(ai_message.content, list)
-                and len(ai_message.content) > 0
-                and isinstance(ai_message.content[0], OutputTextBlock)
-            ):
-                partial_content = ai_message.content[0].text
+            elif isinstance(ai_message.content, list) and len(ai_message.content) > 0:
+                last_text_block = ai_message.content[-1]
+                if isinstance(last_text_block, OutputTextBlock):
+                    partial_content = last_text_block.text
             if not partial_content:
                 continue
             parsed_json = parse_partial_json(partial_content)
@@ -173,8 +170,10 @@ def _llm_structured_stream(
     content = _get_ai_message_from_oai_response(builder.response).content
     if isinstance(content, str):
         return output_schema(**parse_partial_json(content))
-    elif isinstance(content, list) and len(content) > 0 and isinstance(content[0], OutputTextBlock):
-        return output_schema(**parse_partial_json(content[0].text))
+    elif isinstance(content, list) and len(content) > 0:
+        last_text_block = content[-1]
+        if isinstance(last_text_block, OutputTextBlock):
+            return output_schema(**parse_partial_json(last_text_block.text))
     raise ValueError("No content received")
 
 
