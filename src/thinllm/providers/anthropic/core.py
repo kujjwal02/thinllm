@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from thinllm.config import LLMConfig
 from thinllm.core import OutputSchemaType
-from thinllm.messages import AIMessage, MessageType
+from thinllm.messages import AIMessage, MessageType, OutputTextBlock, ToolCallContent
 from thinllm.tools import Tool
 
 from .deserializers import _get_ai_message_from_anthropic_response
@@ -46,9 +46,9 @@ def _create_client(llm_config: LLMConfig) -> anthropic.Anthropic | Any:
                 kwargs["aws_region"] = creds.aws_region
 
         return AnthropicBedrock(**kwargs)
-    else:
-        # Regular Anthropic client
-        return anthropic.Anthropic()
+
+    # Regular Anthropic client
+    return anthropic.Anthropic()
 
 
 def _get_messages_api(client: anthropic.Anthropic | Any, params: dict[str, Any]) -> Any:
@@ -78,6 +78,35 @@ def _get_messages_api(client: anthropic.Anthropic | Any, params: dict[str, Any])
     return client.messages
 
 
+def _get_last_output_text_block(ai_message: AIMessage) -> OutputTextBlock:
+    """
+    Extract the last OutputTextBlock from AIMessage.
+
+    This is a generic utility that can be used across the provider wherever we need
+    to extract the last text output block (e.g., for structured outputs, regular text, etc.)
+
+    Args:
+        ai_message: AIMessage containing OutputTextBlock(s)
+
+    Returns:
+        The last OutputTextBlock found in the message
+
+    Raises:
+        ValueError: If no OutputTextBlock found or content is not in expected format
+    """
+    if isinstance(ai_message.content, str):
+        # If content is a string, wrap it in an OutputTextBlock
+        return OutputTextBlock(text=ai_message.content)
+
+    if isinstance(ai_message.content, list):
+        # Find all OutputTextBlocks and return the last one
+        text_blocks = [block for block in ai_message.content if isinstance(block, OutputTextBlock)]
+        if text_blocks:
+            return text_blocks[-1]
+
+    raise ValueError("No OutputTextBlock found in AIMessage")
+
+
 def _build_common_params(
     llm_config: LLMConfig,
     messages: list[MessageType],
@@ -104,18 +133,38 @@ def _build_common_params(
     if tools:
         params["tools"] = [_get_anthropic_tool(tool) for tool in tools]
 
-    # For structured output, we need to use tool calling with a response_format
-    # Anthropic doesn't have direct structured output like OpenAI, so we'll use a tool
+    # For structured output, use beta structured outputs API
     if output_schema:
-        # Create a tool that represents the structured output
-        params["tools"] = [
-            {
-                "name": "respond_with_structure",
-                "description": f"Respond with structured data matching the {output_schema.__name__} schema",
-                "input_schema": output_schema.model_json_schema(),
+        from thinllm.config import Provider
+
+        # Check if using Bedrock (doesn't support structured outputs beta yet)
+        is_bedrock = llm_config.provider == Provider.BEDROCK_ANTHROPIC
+
+        if is_bedrock:
+            # Fallback to tool-based approach for Bedrock
+            params["tools"] = [
+                {
+                    "name": "respond_with_structure",
+                    "description": f"Respond with structured data matching the {output_schema.__name__} schema",
+                    "input_schema": output_schema.model_json_schema(),
+                }
+            ]
+            params["tool_choice"] = {"type": "tool", "name": "respond_with_structure"}
+        else:
+            # Use beta structured outputs API for regular Anthropic
+            from anthropic import transform_schema
+
+            # Append to existing betas if present, otherwise create new list
+            if "betas" in params:
+                params["betas"].append("structured-outputs-2025-11-13")
+            else:
+                params["betas"] = ["structured-outputs-2025-11-13"]
+
+            # Use Anthropic's transform_schema utility to convert Pydantic model
+            params["output_format"] = {
+                "type": "json_schema",
+                "schema": transform_schema(output_schema),
             }
-        ]
-        params["tool_choice"] = {"type": "tool", "name": "respond_with_structure"}
 
     return params
 
@@ -128,11 +177,11 @@ def _llm_basic(
     """Basic non-streaming LLM call."""
     params = _build_common_params(llm_config, messages, tools=tools)
     client = _create_client(llm_config)
-    
+
     # Get the appropriate API (messages or beta.messages)
     messages_api = _get_messages_api(client, params)
     response = messages_api.create(**params)
-    
+
     return _get_ai_message_from_anthropic_response(response)
 
 
@@ -141,20 +190,40 @@ def _llm_structured(
     messages: list[MessageType],
     output_schema: type[OutputSchemaType],
 ) -> OutputSchemaType:
-    """Non-streaming structured LLM call."""
+    """Non-streaming structured LLM call using beta API or tool-based fallback."""
+    from thinllm.config import Provider
+    from thinllm.utils import parse_partial_json
+
     params = _build_common_params(llm_config, messages, output_schema=output_schema)
     client = _create_client(llm_config)
-    
-    # Get the appropriate API (messages or beta.messages)
+
+    # Use beta.messages API (will be selected automatically based on 'betas' param)
     messages_api = _get_messages_api(client, params)
     response = messages_api.create(**params)
 
-    # Extract the tool call result
-    for content in response.content:
-        if content.type == "tool_use" and content.name == "respond_with_structure":
-            return output_schema(**content.input)
+    # Deserialize to AIMessage
+    ai_message = _get_ai_message_from_anthropic_response(response)
 
-    raise ValueError("No structured response received from Anthropic")
+    # Check if using Bedrock (tool-based approach)
+    is_bedrock = llm_config.provider == Provider.BEDROCK_ANTHROPIC
+
+    if is_bedrock:
+        # Tool-based approach for Bedrock - check for ToolCallContent
+        if isinstance(ai_message.content, list):
+            for block in ai_message.content:
+                if isinstance(block, ToolCallContent) and block.name == "respond_with_structure":
+                    return output_schema(**block.input)
+        raise ValueError("No structured response received from Anthropic Bedrock")
+
+    # Beta API approach for regular Anthropic
+    # Extract the last OutputTextBlock (contains JSON)
+    text_block = _get_last_output_text_block(ai_message)
+
+    # Parse JSON to dict using parse_partial_json
+    parsed_dict = parse_partial_json(text_block.text)
+
+    # Validate and load into Pydantic model
+    return output_schema.model_validate(parsed_dict)
 
 
 def _llm_stream(
@@ -169,7 +238,7 @@ def _llm_stream(
 
     # Get the appropriate API (messages or beta.messages)
     messages_api = _get_messages_api(client, params)
-    
+
     with messages_api.stream(**params) as stream:
         for event in stream:
             builder.add_event(event)
@@ -181,37 +250,86 @@ def _llm_stream(
     return _get_ai_message_from_anthropic_response(builder.response)
 
 
+def _yield_structured_from_tool(
+    ai_message: AIMessage,
+    output_schema: type[OutputSchemaType],
+) -> Generator[OutputSchemaType, None, None]:
+    """Yield structured output from tool calls (Bedrock approach)."""
+    if isinstance(ai_message.content, list):
+        # Find all ToolCallContent blocks and only yield the last one
+        tool_blocks = [block for block in ai_message.content if isinstance(block, ToolCallContent)]
+        if tool_blocks:
+            last_tool_block = tool_blocks[-1]
+            with contextlib.suppress(ValidationError):
+                yield output_schema(**last_tool_block.input)
+
+
+def _yield_structured_from_json(
+    ai_message: AIMessage,
+    output_schema: type[OutputSchemaType],
+) -> Generator[OutputSchemaType, None, None]:
+    """Yield structured output from JSON text (Beta API approach)."""
+    from thinllm.utils import parse_partial_json
+
+    try:
+        text_block = _get_last_output_text_block(ai_message)
+        json_text = text_block.text
+    except ValueError:
+        # No text block yet
+        return
+
+    if json_text:
+        parsed_dict = parse_partial_json(json_text)
+        with contextlib.suppress(ValidationError):
+            yield output_schema.model_validate(parsed_dict)
+
+
 def _llm_structured_stream(  # type: ignore[misc]
     llm_config: LLMConfig,
     messages: list[MessageType],
     output_schema: type[OutputSchemaType],
 ) -> Generator[OutputSchemaType, None, OutputSchemaType]:
-    """Streaming structured LLM call."""
+    """Streaming structured LLM call using beta API or tool-based fallback."""
+    from thinllm.config import Provider
+    from thinllm.utils import parse_partial_json
+
     params = _build_common_params(llm_config, messages, output_schema=output_schema)
     builder = AnthropicStreamMessageBuilder()
     client = _create_client(llm_config)
 
-    # Get the appropriate API (messages or beta.messages)
     messages_api = _get_messages_api(client, params)
-    
+    is_bedrock = llm_config.provider == Provider.BEDROCK_ANTHROPIC
+
     with messages_api.stream(**params) as stream:
         for event in stream:
             builder.add_event(event)
             ai_message = _get_ai_message_from_anthropic_response(builder.response)
 
-            # Try to extract partial structured output
-            if isinstance(ai_message.content, list):
-                for block in ai_message.content:
-                    if hasattr(block, "input") and isinstance(block.input, dict):
-                        with contextlib.suppress(ValidationError):
-                            yield output_schema(**block.input)
+            if is_bedrock:
+                yield from _yield_structured_from_tool(ai_message, output_schema)
+            else:
+                yield from _yield_structured_from_json(ai_message, output_schema)
 
-    # Extract final structured output
-    for content in builder.response.content:
-        if content.type == "tool_use" and content.name == "respond_with_structure":
-            return output_schema(**content.input)
+    # Final output
+    if builder.response is None:
+        raise ValueError("No response received")
 
-    raise ValueError("No structured response received from Anthropic")
+    # Deserialize final response to AIMessage
+    final_ai_message = _get_ai_message_from_anthropic_response(builder.response)
+
+    if is_bedrock:
+        # Tool-based approach for Bedrock - check for ToolCallContent
+        if isinstance(final_ai_message.content, list):
+            for block in final_ai_message.content:
+                if isinstance(block, ToolCallContent) and block.name == "respond_with_structure":
+                    return output_schema(**block.input)
+        raise ValueError("No structured response received from Anthropic Bedrock")
+
+    # Beta API approach for regular Anthropic
+    final_text_block = _get_last_output_text_block(final_ai_message)
+
+    final_dict = parse_partial_json(final_text_block.text)
+    return output_schema.model_validate(final_dict)
 
 
 # Overload 1: Non-streaming, no output schema (with or without tools)
