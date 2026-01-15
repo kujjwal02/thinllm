@@ -24,6 +24,7 @@ A thin, unified wrapper for LLM interactions with support for multiple providers
 - [API Reference](#api-reference)
 - [Examples](#examples)
 - [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -673,12 +674,16 @@ export AWS_REGION=us-east-1
 
 The following features are planned for ThinLLM. These are **up for grabs** - contributions are welcome!
 
+### Core API Features
+
+- [ ] **Async API Support**: Asynchronous API for non-blocking LLM interactions
+
 ### Provider Enhancements
 
 - [ ] **Vertex AI Support**: Integration with Google Cloud's Vertex AI platform
 - [x] **Anthropic Caching**: Prompt caching support for improved performance and cost efficiency
 - [x] **Anthropic Extended Thinking Support**: Enhanced reasoning capabilities with interleaved thinking
-- [ ] **Anthropic Support for Thinking with Structured Output**: Using beta API where applicable
+- [x] **Anthropic Support for Thinking with Structured Output**: Using beta API where applicable
 
 ### Multimodal Capabilities
 
@@ -712,6 +717,7 @@ The following features are planned for ThinLLM. These are **up for grabs** - con
 
 - [ ] **Citation Support**: Source attribution and citation tracking
 - [ ] **Raw Response in AI Message**: Access to raw API responses
+- [ ] **Add stop reason to the response**: Add stop reason to the AIMessage
 
 ### Additional Capabilities
 
