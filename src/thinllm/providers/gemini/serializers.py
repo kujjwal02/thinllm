@@ -33,6 +33,41 @@ def _image_bytes_to_base64(image_bytes: bytes) -> str:
     return base64.b64encode(image_bytes).decode("utf-8")
 
 
+def _serialize_image_to_gemini(image_block: InputImageBlock) -> dict:
+    """
+    Convert InputImageBlock to Gemini part format.
+    
+    Reuses the existing logic for image serialization.
+    
+    Args:
+        image_block: InputImageBlock to serialize
+        
+    Returns:
+        Dictionary in Gemini part format
+        
+    Raises:
+        ValueError: If neither image_bytes nor image_url is provided
+    """
+    if image_block.image_bytes:
+        # Use inline_data for bytes
+        base64_data = _image_bytes_to_base64(image_block.image_bytes)
+        return {
+            "inline_data": {
+                "mime_type": image_block.mimetype or "image/jpeg",
+                "data": base64_data,
+            }
+        }
+    elif image_block.image_url:
+        # Use file_data for URLs
+        return {
+            "file_data": {
+                "file_uri": image_block.image_url,
+            }
+        }
+
+    raise ValueError("InputImageBlock must have either image_bytes or image_url")
+
+
 def _convert_content_block_to_gemini_parts(block: ContentBlock) -> list[dict]:
     """
     Convert a single ContentBlock to Gemini part format.
@@ -65,28 +100,7 @@ def _convert_content_block_to_gemini_parts(block: ContentBlock) -> list[dict]:
                 part["thought_signature"] = thought_sig
             return [part]
         case InputImageBlock():
-            # Gemini supports both inline_data and file_data
-            if block.image_bytes:
-                # Use inline_data for bytes
-                base64_data = _image_bytes_to_base64(block.image_bytes)
-                return [
-                    {
-                        "inline_data": {
-                            "mime_type": "image/jpeg",
-                            "data": base64_data,
-                        }
-                    }
-                ]
-            if block.image_url:
-                # Use file_data for URLs
-                return [
-                    {
-                        "file_data": {
-                            "file_uri": block.image_url,
-                        }
-                    }
-                ]
-            raise ValueError("InputImageBlock must have either image_bytes or image_url")
+            return [_serialize_image_to_gemini(block)]
         case ReasoningContent():
             # Gemini uses thought as a boolean flag with text containing the summary
             # If we have redacted content, use that
@@ -129,12 +143,32 @@ def _convert_content_block_to_gemini_parts(block: ContentBlock) -> list[dict]:
                 fc_part["thought_signature"] = thought_sig
             return [fc_part]
         case ToolResultContent():
-            # Gemini uses function_response
+            # Gemini supports structured response data
+            # Use match/case for output handling
+            match block.output:
+                case str():
+                    response_data = {"result": block.output}
+                case list():
+                    # Build structured response with multiple parts
+                    result_parts = []
+                    for item in block.output:
+                        match item:
+                            case OutputTextBlock() | InputTextBlock():
+                                result_parts.append(item.text)
+                            case InputImageBlock():
+                                # Use the refactored helper function
+                                result_parts.append(_serialize_image_to_gemini(item))
+                    response_data = {"result": result_parts} if result_parts else {"result": ""}
+                case None:
+                    response_data = {"result": ""}
+                case _:
+                    response_data = {"result": ""}
+
             return [
                 {
                     "function_response": {
                         "name": block.name,
-                        "response": {"result": block.output},
+                        "response": response_data,
                     }
                 }
             ]

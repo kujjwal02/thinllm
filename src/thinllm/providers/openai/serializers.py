@@ -33,6 +33,43 @@ def _image_bytes_to_base64_url(image_bytes: bytes) -> str:
     return f"data:image/jpeg;base64,{base64_image}"
 
 
+def _serialize_image_to_openai(image_block: InputImageBlock) -> dict:
+    """
+    Convert InputImageBlock to OpenAI image format.
+    
+    Returns an image object suitable for function_call_output arrays.
+    
+    Args:
+        image_block: InputImageBlock to serialize
+        
+    Returns:
+        Dictionary in OpenAI image_url format
+        
+    Raises:
+        ValueError: If neither image_url nor image_bytes is provided
+    """
+    # Convert to base64 data URL for bytes
+    if image_block.image_bytes:
+        image_url = _image_bytes_to_base64_url(image_block.image_bytes)
+        return {
+            "type": "image_url",
+            "image_url": {
+                "url": image_url,
+                "detail": image_block.detail.value,
+            },
+        }
+    elif image_block.image_url:
+        return {
+            "type": "image_url",
+            "image_url": {
+                "url": image_block.image_url,
+                "detail": image_block.detail.value,
+            },
+        }
+
+    raise ValueError("InputImageBlock must have either image_url or image_bytes")
+
+
 def _convert_content_block_to_oai_dict(block: ContentBlock) -> dict:
     """
     Convert a single ContentBlock to OpenAI content object format.
@@ -103,10 +140,44 @@ def _convert_content_block_to_oai_dict(block: ContentBlock) -> dict:
                 "arguments": block.raw_input,
             }
         case ToolResultContent():
+            # OpenAI supports both string and array outputs in function_call_output
+            # See: https://platform.openai.com/docs/guides/function-calling?api-mode=responses
+            match block.output:
+                case str():
+                    # Simple string output
+                    output = block.output
+                case list():
+                    # Check if we have images - if so, use array format; otherwise use string
+                    has_images = any(isinstance(item, InputImageBlock) for item in block.output)
+
+                    if has_images:
+                        # Use array format for mixed content with images
+                        output_array = []
+                        for item in block.output:
+                            match item:
+                                case OutputTextBlock() | InputTextBlock():
+                                    output_array.append({"type": "text", "text": item.text})
+                                case InputImageBlock():
+                                    # Use the refactored helper function
+                                    output_array.append(_serialize_image_to_openai(item))
+                        output = output_array if output_array else ""
+                    else:
+                        # No images - convert all to text string
+                        parts = []
+                        for item in block.output:
+                            match item:
+                                case OutputTextBlock() | InputTextBlock():
+                                    parts.append(item.text)
+                        output = "\n".join(parts) if parts else ""
+                case None:
+                    output = ""
+                case _:
+                    output = ""
+
             return {
                 "type": "function_call_output",
                 "call_id": block.tool_id,
-                "output": block.output,
+                "output": output,
             }
         case _:
             raise ValueError(f"Unknown content block type: {type(block)}")

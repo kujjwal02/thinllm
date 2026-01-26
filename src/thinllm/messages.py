@@ -241,7 +241,7 @@ class ToolResultContent(BaseContentBlock):
         name: Name of the tool that was executed
         raw_input: Raw input string before parsing
         input: Parsed input arguments
-        output: Output text from the tool
+        output: Output from the tool - can be a string, list of content blocks (text/images), or None
         metadata: Additional metadata
         status: Execution status (SUCCESS or FAILURE)
     """
@@ -251,7 +251,7 @@ class ToolResultContent(BaseContentBlock):
     name: str
     raw_input: str = ""
     input: dict | None = None
-    output: str
+    output: str | list[ToolOutputContent] | None
     metadata: dict[str, Any] = {}
     status: ToolOutputStatus = ToolOutputStatus.SUCCESS
 
@@ -266,18 +266,21 @@ ContentBlock = (
     | ToolResultContent
 )
 
+# Type alias for tool output content - supports text and images
+ToolOutputContent = OutputTextBlock | InputImageBlock
+
 
 class ToolOutput(BaseModel):
     """
     Output from a tool execution.
 
     Attributes:
-        text: The text output from the tool
+        output: The output from the tool - can be a string or list of content blocks (text/images)
         metadata: Additional metadata about the execution
         status: Status of the tool execution (SUCCESS or FAILURE)
     """
 
-    text: str
+    output: str | list[ToolOutputContent]
     metadata: dict[str, Any] = {}
     status: ToolOutputStatus = ToolOutputStatus.SUCCESS
 

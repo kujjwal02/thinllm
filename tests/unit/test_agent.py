@@ -134,7 +134,7 @@ def test_execute_tool_with_tool_output(mock_llm_config):
     def get_data() -> ToolOutput:
         """Get some data."""
         return ToolOutput(
-            text="Data retrieved", metadata={"source": "database"}, status=ToolOutputStatus.SUCCESS
+            output="Data retrieved", metadata={"source": "database"}, status=ToolOutputStatus.SUCCESS
         )
 
     messages = [SystemMessage(content="You are a helpful assistant.")]
@@ -186,6 +186,69 @@ def test_execute_tool_returns_dict(mock_llm_config):
     # Dict should be converted to string
     assert "key" in result.output
     assert "value" in result.output
+    assert result.status == ToolOutputStatus.SUCCESS
+
+
+def test_execute_tool_returns_tooloutput_with_content_blocks(mock_llm_config):
+    """Test tool execution that returns ToolOutput with content blocks."""
+    from thinllm.messages import InputImageBlock, OutputTextBlock
+
+    @tool
+    def get_weather_with_map() -> ToolOutput:
+        """Get weather with map image."""
+        return ToolOutput(
+            output=[
+                OutputTextBlock(text="Weather: 72°F, Sunny"),
+                InputImageBlock(image_url="https://example.com/weather_map.jpg"),
+            ],
+            metadata={"location": "Paris"},
+            status=ToolOutputStatus.SUCCESS,
+        )
+
+    messages = [SystemMessage(content="You are a helpful assistant.")]
+    agent = Agent(llm_config=mock_llm_config, messages=messages, tools=[get_weather_with_map])
+
+    tool_call = ToolCallContent(
+        tool_id="call_weather", name="get_weather_with_map", input={}, raw_input="{}"
+    )
+
+    result = agent._execute_tool(tool_call)
+
+    assert isinstance(result.output, list)
+    assert len(result.output) == 2
+    assert isinstance(result.output[0], OutputTextBlock)
+    assert result.output[0].text == "Weather: 72°F, Sunny"
+    assert isinstance(result.output[1], InputImageBlock)
+    assert result.output[1].image_url == "https://example.com/weather_map.jpg"
+    assert result.metadata == {"location": "Paris"}
+    assert result.status == ToolOutputStatus.SUCCESS
+
+
+def test_execute_tool_returns_list_of_content_blocks(mock_llm_config):
+    """Test tool execution that returns a list of content blocks directly."""
+    from thinllm.messages import InputImageBlock, OutputTextBlock
+
+    @tool
+    def generate_report() -> list:
+        """Generate a report with text and images."""
+        return [
+            OutputTextBlock(text="Report generated"),
+            InputImageBlock(image_url="https://example.com/chart.png"),
+        ]
+
+    messages = [SystemMessage(content="You are a helpful assistant.")]
+    agent = Agent(llm_config=mock_llm_config, messages=messages, tools=[generate_report])
+
+    tool_call = ToolCallContent(
+        tool_id="call_report", name="generate_report", input={}, raw_input="{}"
+    )
+
+    result = agent._execute_tool(tool_call)
+
+    assert isinstance(result.output, list)
+    assert len(result.output) == 2
+    assert isinstance(result.output[0], OutputTextBlock)
+    assert isinstance(result.output[1], InputImageBlock)
     assert result.status == ToolOutputStatus.SUCCESS
 
 

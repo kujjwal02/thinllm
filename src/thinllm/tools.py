@@ -146,6 +146,7 @@ class Tool(BaseModel, Generic[P, T]):
         """
         tool_name = name or func.__name__
         tool_description = description or func.__doc__ or "No description provided."
+        tool_description = tool_description.strip()
         tool_args_schema = args_schema or get_argschema_from_function(func)
         return cls(
             name=tool_name, description=tool_description, func=func, args_schema=tool_args_schema

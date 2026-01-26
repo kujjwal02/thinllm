@@ -167,6 +167,103 @@ class TestConvertContentBlockToOAIDict:
         assert result["action"]["type"] == "search"
         assert result["action"]["sources"] is None
 
+    def test_convert_tool_result_with_text_blocks(self) -> None:
+        """Test converting ToolResultContent with OutputTextBlock list."""
+        from thinllm.messages import OutputTextBlock
+
+        block = ToolResultContent(
+            tool_id="call_text",
+            name="test_tool",
+            output=[OutputTextBlock(text="First line"), OutputTextBlock(text="Second line")],
+        )
+        result = _convert_content_block_to_oai_dict(block)
+
+        assert isinstance(result, dict)
+        assert result["type"] == "function_call_output"
+        assert result["call_id"] == "call_text"
+        # Without images, should be string format
+        assert result["output"] == "First line\nSecond line"
+
+    def test_convert_tool_result_with_image_url(self) -> None:
+        """Test converting ToolResultContent with InputImageBlock URL."""
+        block = ToolResultContent(
+            tool_id="call_image",
+            name="test_tool",
+            output=[InputImageBlock(image_url="https://example.com/result.jpg")],
+        )
+        result = _convert_content_block_to_oai_dict(block)
+
+        assert isinstance(result, dict)
+        assert result["type"] == "function_call_output"
+        assert result["call_id"] == "call_image"
+        # With images, should be array format
+        assert isinstance(result["output"], list)
+        assert len(result["output"]) == 1
+        assert result["output"][0]["type"] == "image_url"
+        assert result["output"][0]["image_url"]["url"] == "https://example.com/result.jpg"
+        assert result["output"][0]["image_url"]["detail"] == "auto"
+
+    def test_convert_tool_result_with_mixed_content(self) -> None:
+        """Test converting ToolResultContent with mixed text and image blocks."""
+        from thinllm.messages import OutputTextBlock
+
+        block = ToolResultContent(
+            tool_id="call_mixed",
+            name="test_tool",
+            output=[
+                OutputTextBlock(text="Here is the result:"),
+                InputImageBlock(image_url="https://example.com/chart.png", detail=ImageDetail.HIGH),
+                OutputTextBlock(text="Analysis complete."),
+            ],
+        )
+        result = _convert_content_block_to_oai_dict(block)
+
+        assert isinstance(result, dict)
+        assert result["type"] == "function_call_output"
+        assert result["call_id"] == "call_mixed"
+        # With images, should be array format
+        assert isinstance(result["output"], list)
+        assert len(result["output"]) == 3
+        assert result["output"][0]["type"] == "text"
+        assert result["output"][0]["text"] == "Here is the result:"
+        assert result["output"][1]["type"] == "image_url"
+        assert result["output"][1]["image_url"]["url"] == "https://example.com/chart.png"
+        assert result["output"][1]["image_url"]["detail"] == "high"
+        assert result["output"][2]["type"] == "text"
+        assert result["output"][2]["text"] == "Analysis complete."
+
+    def test_convert_tool_result_with_image_bytes(self) -> None:
+        """Test converting ToolResultContent with InputImageBlock containing image bytes."""
+        test_bytes = b"fake_image_data"
+        block = ToolResultContent(
+            tool_id="call_bytes",
+            name="test_tool",
+            output=[InputImageBlock(image_bytes=test_bytes, mimetype="image/png")],
+        )
+        result = _convert_content_block_to_oai_dict(block)
+
+        assert isinstance(result, dict)
+        assert result["type"] == "function_call_output"
+        # With images, should be array format
+        assert isinstance(result["output"], list)
+        assert len(result["output"]) == 1
+        assert result["output"][0]["type"] == "image_url"
+        expected_url = _image_bytes_to_base64_url(test_bytes)
+        assert result["output"][0]["image_url"]["url"] == expected_url
+
+    def test_convert_tool_result_with_none_output(self) -> None:
+        """Test converting ToolResultContent with None output."""
+        block = ToolResultContent(
+            tool_id="call_none",
+            name="test_tool",
+            output=None,
+        )
+        result = _convert_content_block_to_oai_dict(block)
+
+        assert isinstance(result, dict)
+        assert result["type"] == "function_call_output"
+        assert result["output"] == ""
+
 
 class TestConvertContentToOAIFormat:
     """Test the _convert_content_to_oai_format function."""

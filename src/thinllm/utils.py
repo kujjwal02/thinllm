@@ -109,7 +109,7 @@ def normalize_tools(tools: "list[Tool | Callable | dict]") -> "list[Tool]":
 
 def _build_result_kwargs(
     tool_call: "ToolCallContent",
-    output: str,
+    output: Any,  # Can be str, list[ToolOutputContent], or None
     status: "ToolOutputStatus",
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -148,31 +148,45 @@ def _create_tool_error_result(
 
 def _build_tool_result(tool_call: "ToolCallContent", result: Any) -> "ToolResultContent":
     """Build a ToolResultContent from the raw execution result."""
-    from thinllm.messages import ToolOutput, ToolOutputStatus, ToolResultContent
+    from thinllm.messages import BaseContentBlock, ToolOutput, ToolOutputStatus, ToolResultContent
 
     # Normalize the return value
     match result:
         case None:
-            output_text = ""
+            output = ""
             metadata = {}
             status = ToolOutputStatus.SUCCESS
         case str():
-            output_text = result
+            output = result
+            metadata = {}
+            status = ToolOutputStatus.SUCCESS
+        case int() | float() | bool():
+            output = str(result)
             metadata = {}
             status = ToolOutputStatus.SUCCESS
         case ToolOutput():
-            output_text = result.text
+            output = result.output  # Now supports str | list[ToolOutputContent]
             metadata = result.metadata
             status = result.status
+        case list():
+            # Check if it's a list of content blocks
+            if all(isinstance(item, BaseContentBlock) for item in result):
+                output = result
+                metadata = {}
+                status = ToolOutputStatus.SUCCESS
+            else:
+                output = str(result)
+                metadata = {}
+                status = ToolOutputStatus.SUCCESS
         case _:
             # Convert to string for other types
-            output_text = str(result)
+            output = str(result)
             metadata = {}
             status = ToolOutputStatus.SUCCESS
 
     result_kwargs = _build_result_kwargs(
         tool_call,
-        output=output_text,
+        output=output,
         status=status,
         metadata=metadata if metadata else None,
     )

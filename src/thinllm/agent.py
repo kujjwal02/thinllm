@@ -263,20 +263,36 @@ class Agent:
             # Normalize the return value
             match result:
                 case None:
-                    output_text = ""
+                    output = ""
                     metadata = {}
                     status = ToolOutputStatus.SUCCESS
                 case str():
-                    output_text = result
+                    output = result
+                    metadata = {}
+                    status = ToolOutputStatus.SUCCESS
+                case int() | float() | bool():
+                    output = str(result)
                     metadata = {}
                     status = ToolOutputStatus.SUCCESS
                 case ToolOutput():
-                    output_text = result.text
+                    output = result.output  # Now supports str | list[ToolOutputContent]
                     metadata = result.metadata
                     status = result.status
+                case list():
+                    # Check if it's a list of content blocks
+                    from thinllm.messages import BaseContentBlock
+
+                    if all(isinstance(item, BaseContentBlock) for item in result):
+                        output = result
+                        metadata = {}
+                        status = ToolOutputStatus.SUCCESS
+                    else:
+                        output = str(result)
+                        metadata = {}
+                        status = ToolOutputStatus.SUCCESS
                 case _:
                     # Convert to string for other types
-                    output_text = str(result)
+                    output = str(result)
                     metadata = {}
                     status = ToolOutputStatus.SUCCESS
 
@@ -286,7 +302,7 @@ class Agent:
                 "name": tool_name,
                 "raw_input": tool_call.raw_input,
                 "input": tool_call.input,
-                "output": output_text,
+                "output": output,
                 "status": status,
             }
             if tool_call.id:

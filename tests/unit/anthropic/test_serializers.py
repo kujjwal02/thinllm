@@ -129,6 +129,114 @@ class TestConvertContentBlockToAnthropicDict:
         assert result["content"] == "Error occurred"
         assert result["is_error"] is True
 
+    def test_convert_tool_result_with_text_block(self) -> None:
+        """Test converting ToolResultContent with OutputTextBlock."""
+        from thinllm.messages import OutputTextBlock
+
+        block = ToolResultContent(
+            tool_id="call_text",
+            name="test_tool",
+            output=[OutputTextBlock(text="This is the output text")],
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+
+        assert isinstance(result, dict)
+        assert result["type"] == "tool_result"
+        assert result["tool_use_id"] == "call_text"
+        assert isinstance(result["content"], list)
+        assert len(result["content"]) == 1
+        assert result["content"][0]["type"] == "text"
+        assert result["content"][0]["text"] == "This is the output text"
+        assert result["is_error"] is False
+
+    def test_convert_tool_result_with_image_block(self) -> None:
+        """Test converting ToolResultContent with InputImageBlock."""
+        block = ToolResultContent(
+            tool_id="call_image",
+            name="test_tool",
+            output=[InputImageBlock(image_url="https://example.com/result.jpg")],
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+
+        assert isinstance(result, dict)
+        assert result["type"] == "tool_result"
+        assert result["tool_use_id"] == "call_image"
+        assert isinstance(result["content"], list)
+        assert len(result["content"]) == 1
+        assert result["content"][0]["type"] == "image"
+        assert result["content"][0]["source"]["type"] == "url"
+        assert result["content"][0]["source"]["url"] == "https://example.com/result.jpg"
+        assert result["is_error"] is False
+
+    def test_convert_tool_result_with_mixed_content(self) -> None:
+        """Test converting ToolResultContent with mixed text and image blocks."""
+        from thinllm.messages import OutputTextBlock
+
+        block = ToolResultContent(
+            tool_id="call_mixed",
+            name="test_tool",
+            output=[
+                OutputTextBlock(text="Here is the result:"),
+                InputImageBlock(image_url="https://example.com/chart.png"),
+                OutputTextBlock(text="Analysis complete."),
+            ],
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+
+        assert isinstance(result, dict)
+        assert result["type"] == "tool_result"
+        assert result["tool_use_id"] == "call_mixed"
+        assert isinstance(result["content"], list)
+        assert len(result["content"]) == 3
+        assert result["content"][0]["type"] == "text"
+        assert result["content"][0]["text"] == "Here is the result:"
+        assert result["content"][1]["type"] == "image"
+        assert result["content"][2]["type"] == "text"
+        assert result["content"][2]["text"] == "Analysis complete."
+        assert result["is_error"] is False
+
+    def test_convert_tool_result_with_image_bytes(self) -> None:
+        """Test converting ToolResultContent with InputImageBlock containing image bytes."""
+        import base64
+
+        from thinllm.messages import OutputTextBlock
+
+        test_bytes = b"fake_image_data"
+        block = ToolResultContent(
+            tool_id="call_bytes",
+            name="test_tool",
+            output=[
+                OutputTextBlock(text="Generated image:"),
+                InputImageBlock(image_bytes=test_bytes, mimetype="image/png"),
+            ],
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+
+        assert isinstance(result, dict)
+        assert result["type"] == "tool_result"
+        assert isinstance(result["content"], list)
+        assert len(result["content"]) == 2
+        assert result["content"][1]["type"] == "image"
+        assert result["content"][1]["source"]["type"] == "base64"
+        assert result["content"][1]["source"]["media_type"] == "image/png"
+        assert result["content"][1]["source"]["data"] == base64.standard_b64encode(test_bytes).decode(
+            "utf-8"
+        )
+
+    def test_convert_tool_result_with_none_output(self) -> None:
+        """Test converting ToolResultContent with None output."""
+        block = ToolResultContent(
+            tool_id="call_none",
+            name="test_tool",
+            output=None,
+        )
+        result = _convert_content_block_to_anthropic_dict(block)
+
+        assert isinstance(result, dict)
+        assert result["type"] == "tool_result"
+        assert result["content"] == ""
+        assert result["is_error"] is False
+
     def test_convert_input_image_block_url(self) -> None:
         """Test converting InputImageBlock with URL source."""
         block = InputImageBlock(

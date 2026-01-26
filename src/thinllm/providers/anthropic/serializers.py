@@ -32,6 +32,57 @@ def _add_cache_control(result_dict: dict, block: ContentBlock) -> None:
         result_dict["cache_control"] = cache_control_dict
 
 
+def _serialize_image_to_anthropic(image_block: InputImageBlock) -> dict:
+    """
+    Convert InputImageBlock to Anthropic image format.
+    
+    Reuses the existing logic for image serialization.
+    
+    Args:
+        image_block: InputImageBlock to serialize
+        
+    Returns:
+        Dictionary in Anthropic image format
+        
+    Raises:
+        ValueError: If image mimetype is unsupported or if neither image_url nor image_bytes is provided
+    """
+    import base64
+
+    # Validate mimetype
+    supported_mimetypes = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    if image_block.mimetype and image_block.mimetype not in supported_mimetypes:
+        raise ValueError(
+            f"Unsupported image mimetype for Anthropic: {image_block.mimetype}. "
+            f"Supported types: {', '.join(supported_mimetypes)}"
+        )
+
+    # Handle URL-based images
+    if image_block.image_url:
+        return {
+            "type": "image",
+            "source": {
+                "type": "url",
+                "url": image_block.image_url,
+            },
+        }
+
+    # Handle base64-encoded images
+    if image_block.image_bytes:
+        media_type = image_block.mimetype or "image/jpeg"
+        base64_data = base64.standard_b64encode(image_block.image_bytes).decode("utf-8")
+        return {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": media_type,
+                "data": base64_data,
+            },
+        }
+
+    raise ValueError("InputImageBlock must have either image_url or image_bytes")
+
+
 def _convert_content_block_to_anthropic_dict(block: ContentBlock) -> dict:  # noqa: C901
     """
     Convert a single ContentBlock to Anthropic content object format.
@@ -84,58 +135,38 @@ def _convert_content_block_to_anthropic_dict(block: ContentBlock) -> dict:  # no
             _add_cache_control(result, block)
             return result
         case ToolResultContent():
+            # Handle different output types using match/case
+            match block.output:
+                case str():
+                    content = block.output
+                case list():
+                    # Convert content blocks
+                    content_parts = []
+                    for item in block.output:
+                        match item:
+                            case OutputTextBlock() | InputTextBlock():
+                                content_parts.append({"type": "text", "text": item.text})
+                            case InputImageBlock():
+                                # Use the refactored helper function
+                                content_parts.append(_serialize_image_to_anthropic(item))
+                    content = content_parts if content_parts else ""
+                case None:
+                    content = ""
+                case _:
+                    content = ""
+
             result = {
                 "type": "tool_result",
                 "tool_use_id": block.tool_id,
-                "content": block.output,
+                "content": content,
                 "is_error": block.status.value == "failure",
             }
             _add_cache_control(result, block)
             return result
         case InputImageBlock():
-            import base64
-
-            # Validate mimetype for Anthropic
-            supported_mimetypes = {"image/jpeg", "image/png", "image/gif", "image/webp"}
-            if block.mimetype and block.mimetype not in supported_mimetypes:
-                raise ValueError(
-                    f"Unsupported image mimetype for Anthropic: {block.mimetype}. "
-                    f"Supported types: {', '.join(supported_mimetypes)}"
-                )
-
-            # Handle URL-based images
-            if block.image_url:
-                result = {
-                    "type": "image",
-                    "source": {
-                        "type": "url",
-                        "url": block.image_url,
-                    },
-                }
-                _add_cache_control(result, block)
-                return result
-
-            # Handle base64-encoded images
-            if block.image_bytes:
-                # Default to image/jpeg if no mimetype is provided
-                media_type = block.mimetype or "image/jpeg"
-
-                # Encode bytes to base64 string
-                base64_data = base64.standard_b64encode(block.image_bytes).decode("utf-8")
-
-                result = {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": media_type,
-                        "data": base64_data,
-                    },
-                }
-                _add_cache_control(result, block)
-                return result
-
-            # This shouldn't happen due to model validation, but just in case
-            raise ValueError("InputImageBlock must have either image_url or image_bytes")
+            result = _serialize_image_to_anthropic(block)
+            _add_cache_control(result, block)
+            return result
         case _:
             raise ValueError(f"Unsupported content block type for Anthropic: {type(block)}")
 

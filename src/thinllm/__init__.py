@@ -28,6 +28,8 @@ from .messages import (
     SystemMessage,
     ToolCallContent,
     ToolCallStatus,
+    ToolOutput,
+    ToolOutputContent,
     ToolOutputStatus,
     ToolResultContent,
     UserMessage,
@@ -66,6 +68,8 @@ __all__ = [
     "ToolCallContent",
     "ToolCallStatus",
     "ToolResultContent",
+    "ToolOutput",
+    "ToolOutputContent",
     "ToolOutputStatus",
     "get_tool_result",
     # Tools
