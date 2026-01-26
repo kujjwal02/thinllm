@@ -112,6 +112,8 @@ def _build_result_kwargs(
     output: Any,  # Can be str, list[ToolOutputContent], or None
     status: "ToolOutputStatus",
     metadata: dict[str, Any] | None = None,
+    user_input_required: bool = False,
+    user_input_data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build base kwargs dictionary for ToolResultContent."""
     result_kwargs = {
@@ -121,6 +123,8 @@ def _build_result_kwargs(
         "input": tool_call.input,
         "output": output,
         "status": status,
+        "user_input_required": user_input_required,
+        "user_input_data": user_input_data,
     }
     if tool_call.id:
         result_kwargs["id"] = tool_call.id
@@ -148,47 +152,32 @@ def _create_tool_error_result(
 
 def _build_tool_result(tool_call: "ToolCallContent", result: Any) -> "ToolResultContent":
     """Build a ToolResultContent from the raw execution result."""
-    from thinllm.messages import BaseContentBlock, ToolOutput, ToolOutputStatus, ToolResultContent
+    from thinllm.messages import ToolOutput, ToolOutputStatus, ToolResultContent
 
     # Normalize the return value
+    metadata = {}
+    status = ToolOutputStatus.SUCCESS
+    user_input_required = False
+    user_input_data = {}
     match result:
         case None:
             output = ""
-            metadata = {}
-            status = ToolOutputStatus.SUCCESS
-        case str():
-            output = result
-            metadata = {}
-            status = ToolOutputStatus.SUCCESS
-        case int() | float() | bool():
-            output = str(result)
-            metadata = {}
-            status = ToolOutputStatus.SUCCESS
         case ToolOutput():
-            output = result.output  # Now supports str | list[ToolOutputContent]
+            output = result.output
             metadata = result.metadata
             status = result.status
-        case list():
-            # Check if it's a list of content blocks
-            if all(isinstance(item, BaseContentBlock) for item in result):
-                output = result
-                metadata = {}
-                status = ToolOutputStatus.SUCCESS
-            else:
-                output = str(result)
-                metadata = {}
-                status = ToolOutputStatus.SUCCESS
+            user_input_required = result.user_input_required
+            user_input_data = result.user_input_data
         case _:
-            # Convert to string for other types
             output = str(result)
-            metadata = {}
-            status = ToolOutputStatus.SUCCESS
 
     result_kwargs = _build_result_kwargs(
         tool_call,
         output=output,
         status=status,
         metadata=metadata if metadata else None,
+        user_input_required=user_input_required,
+        user_input_data=user_input_data,
     )
     return ToolResultContent(**result_kwargs)
 

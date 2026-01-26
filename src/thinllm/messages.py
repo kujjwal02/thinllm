@@ -230,6 +230,9 @@ class ToolCallContent(BaseContentBlock):
         return get_tool_result(self, tools)
 
 
+ToolOutputContent = OutputTextBlock | InputImageBlock
+
+
 class ToolResultContent(BaseContentBlock):
     """
     Tool result content block containing the result of a tool execution.
@@ -253,6 +256,8 @@ class ToolResultContent(BaseContentBlock):
     input: dict | None = None
     output: str | list[ToolOutputContent] | None
     metadata: dict[str, Any] = {}
+    user_input_required: bool = False
+    user_input_data: dict[str, Any] | None = None
     status: ToolOutputStatus = ToolOutputStatus.SUCCESS
 
 
@@ -267,7 +272,6 @@ ContentBlock = (
 )
 
 # Type alias for tool output content - supports text and images
-ToolOutputContent = OutputTextBlock | InputImageBlock
 
 
 class ToolOutput(BaseModel):
@@ -283,6 +287,8 @@ class ToolOutput(BaseModel):
     output: str | list[ToolOutputContent]
     metadata: dict[str, Any] = {}
     status: ToolOutputStatus = ToolOutputStatus.SUCCESS
+    user_input_required: bool = False
+    user_input_data: dict[str, Any] | None = None
 
 
 class ToolResult(BaseModel):
