@@ -257,7 +257,7 @@ class ToolResultContent(BaseContentBlock):
     output: str | list[ToolOutputContent] | None
     metadata: dict[str, Any] = {}
     user_input_required: bool = False
-    user_input_data: dict[str, Any] | None = None
+    user_input_data: dict | list | str | int | float | bool | None = None
     status: ToolOutputStatus = ToolOutputStatus.SUCCESS
 
 
@@ -288,7 +288,7 @@ class ToolOutput(BaseModel):
     metadata: dict[str, Any] = {}
     status: ToolOutputStatus = ToolOutputStatus.SUCCESS
     user_input_required: bool = False
-    user_input_data: dict[str, Any] | None = None
+    user_input_data: dict | list | str | int | float | bool | None = None
 
 
 class ToolResult(BaseModel):

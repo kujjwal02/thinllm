@@ -113,7 +113,7 @@ def _build_result_kwargs(
     status: "ToolOutputStatus",
     metadata: dict[str, Any] | None = None,
     user_input_required: bool = False,
-    user_input_data: dict[str, Any] | None = None,
+    user_input_data: JSONTYPE = None,
 ) -> dict[str, Any]:
     """Build base kwargs dictionary for ToolResultContent."""
     result_kwargs = {
@@ -158,7 +158,7 @@ def _build_tool_result(tool_call: "ToolCallContent", result: Any) -> "ToolResult
     metadata = {}
     status = ToolOutputStatus.SUCCESS
     user_input_required = False
-    user_input_data = {}
+    user_input_data = None
     match result:
         case None:
             output = ""
