@@ -117,16 +117,19 @@ def _build_common_params(
     # Get effective params
     effective_params = llm_config.get_effective_params()
 
+    # Extract enable_auto_cache flag
+    enable_auto_cache = llm_config.params.enable_auto_cache
+
     params: dict[str, Any] = {
         "model": llm_config.model_id,
-        "messages": _get_anthropic_messages(messages),
+        "messages": _get_anthropic_messages(messages, enable_auto_cache=enable_auto_cache),
     }
 
     # Add effective params
     params.update(effective_params)
 
     # Add system message if present
-    system_blocks = _get_system_blocks_from_messages(messages)
+    system_blocks = _get_system_blocks_from_messages(messages, enable_auto_cache=enable_auto_cache)
     if system_blocks:
         params["system"] = system_blocks
 

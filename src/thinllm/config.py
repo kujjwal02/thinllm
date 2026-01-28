@@ -88,6 +88,7 @@ class ModelParams(BaseModel):
 
     thinking: ThinkingConfig | None = None
     tool_choice: ToolChoiceConfig | None = None
+    enable_auto_cache: bool = False
 
 
 class Credentials(BaseModel):
@@ -198,7 +199,7 @@ class ParamTranslator:
         if params.thinking and params.thinking.enabled and params.thinking.thinking_budget:
             if params.temperature != 1:
                 raise ValueError("Thinking is only supported with temperature=1")
-            
+
             # Validation: max_tokens check only applies when NOT using interleaved thinking
             if (
                 not params.thinking.anthropic_interleaved_thinking
@@ -208,12 +209,12 @@ class ParamTranslator:
                 raise ValueError(
                     f"max_output_tokens must be greater than thinking budget. max_output_tokens: {params.max_output_tokens}, thinking_budget: {params.thinking.thinking_budget}"
                 )
-            
+
             result["thinking"] = {
                 "budget_tokens": params.thinking.thinking_budget,
                 "type": "enabled",
             }
-            
+
             # Add betas parameter for interleaved thinking
             # The betas parameter is only supported by beta APIs
             if params.thinking.anthropic_interleaved_thinking:

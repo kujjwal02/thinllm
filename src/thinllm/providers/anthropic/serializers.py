@@ -35,15 +35,15 @@ def _add_cache_control(result_dict: dict, block: ContentBlock) -> None:
 def _serialize_image_to_anthropic(image_block: InputImageBlock) -> dict:
     """
     Convert InputImageBlock to Anthropic image format.
-    
+
     Reuses the existing logic for image serialization.
-    
+
     Args:
         image_block: InputImageBlock to serialize
-        
+
     Returns:
         Dictionary in Anthropic image format
-        
+
     Raises:
         ValueError: If image mimetype is unsupported or if neither image_url nor image_bytes is provided
     """
@@ -171,7 +171,9 @@ def _convert_content_block_to_anthropic_dict(block: ContentBlock) -> dict:  # no
             raise ValueError(f"Unsupported content block type for Anthropic: {type(block)}")
 
 
-def _get_anthropic_messages(messages: list[MessageType]) -> list[dict[str, Any]]:
+def _get_anthropic_messages(
+    messages: list[MessageType], enable_auto_cache: bool = False
+) -> list[dict[str, Any]]:
     """
     Convert internal message format to Anthropic API message format.
 
@@ -180,6 +182,7 @@ def _get_anthropic_messages(messages: list[MessageType]) -> list[dict[str, Any]]
 
     Args:
         messages: List of internal message objects
+        enable_auto_cache: If True, automatically add cache control to the last 2 user message blocks
 
     Returns:
         List of message dictionaries in Anthropic format
@@ -225,6 +228,24 @@ def _get_anthropic_messages(messages: list[MessageType]) -> list[dict[str, Any]]
                 )
             case _:
                 raise TypeError(f"Unsupported message type for Anthropic: {type(message)}")
+
+    # Apply auto-cache to the last 2 user message content blocks if enabled
+    if enable_auto_cache and result:
+        # Collect all user message content blocks with their positions
+        user_blocks: list[tuple[int, int]] = []  # (message_index, block_index)
+        for msg_idx, msg in enumerate(result):
+            if msg["role"] == "user":
+                for block_idx in range(len(msg["content"])):
+                    user_blocks.append((msg_idx, block_idx))
+
+        # Apply cache control to the last 2 blocks (or fewer if there aren't 2)
+        if user_blocks:
+            num_blocks_to_cache = min(2, len(user_blocks))
+            for msg_idx, block_idx in user_blocks[-num_blocks_to_cache:]:
+                # Only add cache control if not already present
+                if "cache_control" not in result[msg_idx]["content"][block_idx]:
+                    result[msg_idx]["content"][block_idx]["cache_control"] = {"type": "ephemeral"}
+
     return result
 
 
@@ -253,7 +274,9 @@ def _get_anthropic_tool(tool: Tool | Callable | dict) -> dict:
     }
 
 
-def _get_system_blocks_from_messages(messages: list[MessageType]) -> list[dict[str, Any]]:
+def _get_system_blocks_from_messages(
+    messages: list[MessageType], enable_auto_cache: bool = False
+) -> list[dict[str, Any]]:
     """
     Extract system blocks from messages with cache control support.
 
@@ -262,6 +285,7 @@ def _get_system_blocks_from_messages(messages: list[MessageType]) -> list[dict[s
 
     Args:
         messages: List of messages to extract system instructions from
+        enable_auto_cache: If True, automatically add cache control to the last 2 blocks
 
     Returns:
         List of text block dictionaries in Anthropic format with optional cache_control
@@ -287,4 +311,14 @@ def _get_system_blocks_from_messages(messages: list[MessageType]) -> list[dict[s
                             raise TypeError(
                                 f"Unsupported content block type in system message: {type(block)}"
                             )
+
+    # Apply auto-cache to the last 2 blocks if enabled
+    if enable_auto_cache and system_blocks:
+        # Get the last 2 blocks (or fewer if there aren't 2)
+        num_blocks_to_cache = min(2, len(system_blocks))
+        for i in range(len(system_blocks) - num_blocks_to_cache, len(system_blocks)):
+            # Only add cache control if not already present
+            if "cache_control" not in system_blocks[i]:
+                system_blocks[i]["cache_control"] = {"type": "ephemeral"}
+
     return system_blocks
